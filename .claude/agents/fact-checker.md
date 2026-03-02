@@ -154,6 +154,26 @@ Delta = |Reviewer - Generator| = {N}
 - Check if the comparison criteria are fair and current
 - Look for benchmark methodology details
 
+## Context Isolation (Worktree Recommendation)
+
+The @fact-checker's web searches and claim-by-claim analysis can consume significant context tokens. To preserve the Orchestrator's context budget:
+
+**Recommended invocation** — use `isolation: "worktree"` when spawning via Agent tool:
+
+```
+Agent tool call:
+  subagent_type: fact-checker
+  isolation: worktree
+  prompt: "Fact-check step-N output at {path}. Generator pACS = {score}."
+```
+
+**Benefits**:
+- Fact-checker gets a clean context — WebSearch/WebFetch results don't pollute Orchestrator
+- Orchestrator receives only the final fact-check report summary
+- Especially valuable for research-heavy steps with many verifiable claims
+
+**When to skip isolation**: Quick fact-checks with < 5 claims or when the Orchestrator needs real-time claim verification feedback.
+
 ## NEVER DO
 
 - NEVER mark a claim as "Verified" without citing a specific source.

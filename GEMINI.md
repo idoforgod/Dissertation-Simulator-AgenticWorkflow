@@ -61,7 +61,7 @@
 | pACS (자체 신뢰 평가) | Verification Gate 통과 후 에이전트가 F/C/L 3차원 자기 평가. Pre-mortem Protocol 필수. min-score 원칙. GREEN(≥70): 자동 진행, YELLOW(50-69): 플래그 후 진행, RED(<50): 재작업. `AGENTS.md §5.4` 참조 |
 | Adversarial Review (Enhanced L2) | 기존 L2 Calibration을 대체하는 강화된 품질 검증. `@reviewer`(코드/산출물 비판적 분석, 읽기 전용) + `@fact-checker`(외부 사실 검증, 웹 접근). P1 검증(`validate_review.py`)으로 리뷰 품질 보장. `AGENTS.md §5.5` 참조 |
 | Translation Protocol | 영어 산출물 → 한국어 번역. `@translator` 서브에이전트가 `glossary.yaml` 기반 용어 일관성 유지. P1 검증(`validate_translation.py` T1-T9 + `validate_verification.py` V1a-V1c)으로 번역·검증 품질 보장. Review PASS가 Translation의 전제. `AGENTS.md §5.2` 참조 |
-| Predictive Debugging (L-1) | 에러 이력 기반 위험 파일 사전 경고. `predictive_debug_guard.py`(PreToolUse 경고 전용) + `aggregate_risk_scores()`(SessionStart P1 집계) + `validate_risk_scores()`(RS1-RS6 검증). `risk-scores.json` 캐시. `_context_lib.py` + `CLAUDE.md` 참조 |
+| Predictive Debugging (L-1) | 에러 이력 기반 위험 파일 사전 경고. `predictive_debug_guard.py`(PreToolUse 경고 전용) + `aggregate_risk_scores()`(SessionStart P1 집계) + `validate_risk_scores()`(RS1-RS6 검증). `risk-scores.json` 캐시. `_context_lib.py` + `docs/protocols/context-preservation-detail.md` 참조 |
 | Abductive Diagnosis | 품질 게이트(Verification/pACS/Review) FAIL → 재시도 사이에 3단계 구조화된 진단 수행. Step A: P1 사전 증거 수집(`diagnose_context.py`), Step B: LLM 원인 분석(가설 ≥ 2개), Step C: P1 사후 검증(`validate_diagnosis.py` AD1-AD10). Fast-Path(FP1-FP3)로 결정론적 단축 가능. `diagnosis-logs/`에 기록. `AGENTS.md §5.6` 참조 |
 
 ## 컨텍스트 보존

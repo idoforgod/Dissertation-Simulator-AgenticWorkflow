@@ -40,7 +40,7 @@ import sys
 
 # Add script directory to path for shared library import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _context_lib import validate_domain_knowledge
+from _context_lib import extract_remediations, validate_domain_knowledge
 
 
 def main():
@@ -95,6 +95,17 @@ def main():
             if cc_match:
                 constraint_count = int(cc_match.group(1))
 
+    # Remediation mapping — OpenAI harness pattern: inject fix instructions
+    _REMEDIATIONS = {
+        "DK1": "Create or fix domain-knowledge.yaml — must be valid YAML with proper structure",
+        "DK2": "Add required metadata keys: domain (string) and schema_version (string) to metadata section",
+        "DK3": "Fix entities structure: each entity needs unique id (slug format), type (string), attributes (dict)",
+        "DK4": "Fix relations referential integrity: all subject/object must reference existing entity IDs, confidence 0-1",
+        "DK5": "Fix constraints structure: each constraint needs id, description, and check fields",
+        "DK6": "Fix DKS markers in output: all [dks:xxx] references must resolve to entity/relation IDs",
+        "DK7": "Constraint violation detected — review and fix output to satisfy domain constraints",
+    }
+
     # Build output
     output = {
         "valid": is_valid,
@@ -103,6 +114,11 @@ def main():
         "constraint_count": constraint_count,
         "warnings": list(warnings),
     }
+
+    # Extract remediation for failed checks (P1-B: central function + P1-F: self-check)
+    remediations = extract_remediations(warnings, _REMEDIATIONS)
+    if remediations:
+        output["remediations"] = remediations
 
     if check_step is not None:
         output["checked_step"] = check_step

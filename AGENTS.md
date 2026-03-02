@@ -463,7 +463,7 @@ workflow:
 | **Hook** | 스냅샷 Autopilot 섹션 | 세션 경계에서 Autopilot 상태를 IMMORTAL 우선순위로 보존 |
 | **Hook** | Stop Decision Log 안전망 | 자동 승인 패턴 감지 → Decision Log 누락 시 보완 생성 |
 | **Hook** | PostToolUse 진행 추적 | work_log에 `autopilot_step` 필드로 단계 진행 기록 |
-| **프롬프트** | Execution Checklist | 아래 정의된 각 단계 시작/실행/완료 필수 행동 목록 (Claude Code 상세: CLAUDE.md) |
+| **프롬프트** | Execution Checklist | 아래 정의된 각 단계 시작/실행/완료 필수 행동 목록 (Claude Code 상세: `docs/protocols/autopilot-execution.md`) |
 
 > Hook 계층은 SOT를 **읽기 전용**으로만 접근한다 (절대 기준 2 준수).
 
@@ -478,7 +478,7 @@ workflow:
 | **단계 완료 후** | 산출물 디스크 저장, `Verification` 기준 대비 자기 검증, 실패 시 해당 부분만 재실행(최대 10회, ULW 활성 시 15회 — §5.1.1), SOT `outputs`에 경로 기록, `current_step` +1, Decision Log 생성 |
 | **절대 금지** | `current_step` 2이상 한 번에 증가, 산출물 없이 진행, "자동이니까 간략하게" 축약, Verification FAIL인 채로 진행 |
 
-> **Claude Code 상세**: CLAUDE.md의 Autopilot Execution Checklist에 `(team)` 단계, 번역, Hook 연동 등 Claude Code 전용 체크리스트가 추가로 정의되어 있다.
+> **Claude Code 상세**: `docs/protocols/autopilot-execution.md`에 `(team)` 단계, 번역, Hook 연동 등 Claude Code 전용 체크리스트가 추가로 정의되어 있다.
 
 **활성화:** 기본값은 비활성(interactive). 워크플로우 Overview에 `Autopilot: enabled` 명시 또는 실행 시 사용자 지시로 활성화. 실행 중 토글 가능.
 
@@ -505,7 +505,7 @@ workflow:
 
 > **결합 규칙**: ULW는 Autopilot을 **강화**한다 — Autopilot의 품질 게이트 재시도 한도를 10→15회로 상향. Safety Hook 차단은 항상 존중.
 
-상세: `CLAUDE.md` ULW Mode 섹션
+상세: `docs/protocols/ulw-mode.md`
 
 ### 5.2 English-First 실행 및 번역 프로토콜
 
@@ -1087,13 +1087,14 @@ Task → L0 → L1 → L1.5 → Review(L2) → PASS → Translation → SOT upda
 | **Step B — LLM 진단** | Orchestrator (Claude) | 증거 번들 + 가설 우선순위 | 진단 로그 (`diagnosis-logs/step-N-gate-timestamp.md`) | 판단적 |
 | **Step C — P1 사후 검증** | `validate_diagnosis.py` | 진단 로그 | AD1-AD10 구조적 무결성 (JSON) | 결정론적 |
 
-#### 가설 체계 (H1/H2/H3)
+#### 가설 체계 (H1/H2/H3/H4)
 
 | 가설 | 라벨 | 우선순위 결정 기준 |
 |------|------|-------------------|
 | **H1** | 상류 데이터 품질 문제 | 이전 단계 산출물 누락/과소 시 최우선 |
 | **H2** | 현재 단계 실행 격차 | 기본 최우선 (가장 빈번) |
 | **H3** | 기준 해석 오류 | Review 게이트에서 우선순위 상승 |
+| **H4** | 역량 갭 — 도구/스크립트/인프라 부재 | H2 2회 반복 미해결 시 자동 승격 |
 
 #### Fast-Path (FP1-FP3)
 
@@ -1112,7 +1113,7 @@ LLM 진단을 건너뛰는 결정론적 단축 경로:
 | AD1 | 진단 로그 파일 존재 |
 | AD2 | 최소 크기 ≥ 100 bytes |
 | AD3 | Gate 필드 일치 |
-| AD4 | 선택된 가설 존재 (H1/H2/H3) |
+| AD4 | 선택된 가설 존재 (H1/H2/H3/H4) |
 | AD5 | 증거 항목 ≥ 1개 |
 | AD6 | Action Plan 섹션 존재 |
 | AD7 | 순방향 단계 참조 금지 |

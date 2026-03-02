@@ -97,7 +97,7 @@ AgenticWorkflow/
 - **I-3. Bounded Retry Escalation**: 동일 대상 3회 초과 재시도 금지(품질 게이트는 별도 예산 적용)
 - **Compliance Guard**: Python Hook이 3개 강화 규칙의 준수를 결정론적으로 검증 (스냅샷 IMMORTAL 보존)
 
-상세: `CLAUDE.md` ULW Mode 섹션
+상세: `docs/protocols/ulw-mode.md`
 
 ## 4계층 품질 보장 (Quality Assurance Stack)
 

@@ -199,7 +199,7 @@ _SYSTEM_CMD_RE = re.compile(
 )
 
 # Used by Abductive Diagnosis functions — diagnosis-logs/ parsing
-# Captures the FULL heading line (including H-ID) so AD9 can extract H[123] from it.
+# Captures the FULL heading line (including H-ID) so AD9 can extract H[1-4] from it.
 # E.g., "## H1: Upstream data quality issue" → captures "H1: Upstream data quality issue"
 _DIAG_HYPOTHESIS_RE = re.compile(
     r"^#+\s*((?:H\d|Hypothesis)\b.+)", re.MULTILINE | re.IGNORECASE,
@@ -4385,6 +4385,57 @@ def verify_pacs_arithmetic(pacs_log_path):
     return (True, None)
 
 
+def extract_remediations(warnings, remediations_dict):
+    """Central remediation extraction — replaces 7 inline loops across validators.
+
+    P1 Compliance: Deterministic prefix matching + completeness self-check.
+    Called by all validate_*.py scripts after validation completes.
+
+    Matches warnings starting with "{CODE} FAIL" to _REMEDIATIONS keys.
+    Also performs P1-F completeness self-check: if a FAIL code has no matching
+    remediation entry, adds a warning to the returned dict.
+
+    Args:
+        warnings: list of warning strings from validator (e.g., ["PA1 FAIL: ..."])
+        remediations_dict: dict mapping check codes to fix instructions
+
+    Returns:
+        dict: {code: remediation_text, ...} for matched FAIL codes.
+              If a FAIL code has no remediation, includes:
+              {code: "NO_REMEDIATION: check code '{code}' missing from _REMEDIATIONS"}
+    """
+    if not warnings or not remediations_dict:
+        return {}
+
+    result = {}
+    for w in warnings:
+        # C-1: Defensive type guard — non-string elements (None, int, etc.) skip
+        if not isinstance(w, str) or "FAIL" not in w:
+            continue
+        matched = False
+        for code in remediations_dict:
+            if w.startswith(f"{code} FAIL"):
+                result[code] = remediations_dict[code]
+                matched = True
+                break
+        # P1-F: Completeness self-check — detect missing remediation entries
+        if not matched:
+            # Extract the check code prefix (e.g., "PA1" from "PA1 FAIL: ...")
+            fail_idx = w.find(" FAIL")
+            if fail_idx > 0:
+                fail_code = w[:fail_idx].strip()
+                # H-2: Only accept valid code format (PA1, T9, V1a, RV1, etc.)
+                # Reject multi-word or malformed prefixes
+                if (fail_code
+                        and re.match(r'^[A-Z]+\d+[a-z]?$', fail_code)
+                        and fail_code not in result):
+                    result[fail_code] = (
+                        f"NO_REMEDIATION: check code '{fail_code}' missing "
+                        f"from _REMEDIATIONS — add an entry to the validator script"
+                    )
+    return result
+
+
 def validate_pacs_output(project_dir, step_number, pacs_type="general"):
     """PA1-PA7: pACS log structural integrity + arithmetic + RED threshold.
 
@@ -5760,10 +5811,11 @@ def _gather_upstream_evidence(project_dir, step, sot_data=None):
 def _determine_hypothesis_priority(retry_history, upstream_evidence, gate):
     """Rule-based hypothesis prioritization based on available evidence.
 
-    Three hypothesis categories (H1, H2, H3):
+    Four hypothesis categories (H1, H2, H3, H4):
         H1: Upstream data quality (missing/thin upstream outputs)
         H2: Current step execution gap (most common)
         H3: Criteria interpretation error (rare)
+        H4: Capability gap — missing tool, script, or infrastructure
 
     Returns:
         list of dicts with keys: id (str), label (str), priority (int 1-3),
@@ -5812,6 +5864,30 @@ def _determine_hypothesis_priority(retry_history, upstream_evidence, gate):
         "label": "Criteria interpretation error",
         "priority": h3_priority,
         "reason": "Review gate benefits from criteria re-examination" if gate == "review" else "Low prior probability",
+    })
+
+    # H4: Capability gap — missing tool, script, or infrastructure
+    # Elevated priority when: (a) repeated retries with same H2, (b) error
+    # patterns suggest missing commands/tools. OpenAI harness pattern:
+    # "build the missing capability rather than retrying manually."
+    h4_priority = 3  # default: low
+    h2_repeats = sum(
+        1 for d in prev_diag
+        if d.get("selected_hypothesis", "").startswith("H2")
+    )
+    if h2_repeats >= 2:
+        # Two H2 attempts failed → likely not an execution gap but a missing capability
+        h4_priority = 1
+    hypotheses.append({
+        "id": "H4",
+        "label": "Capability gap — missing tool, script, or infrastructure",
+        "priority": h4_priority,
+        "reason": (
+            f"H2 selected {h2_repeats} times without resolution — "
+            "consider building missing capability"
+            if h2_repeats >= 2
+            else "Low prior probability — check after H2 exhausted"
+        ),
     })
 
     # Sort by priority (1 = highest)
@@ -5949,7 +6025,7 @@ def validate_diagnosis_log(project_dir, step, gate):
         AD1: Diagnosis log file exists in diagnosis-logs/
         AD2: Minimum file size (≥ 100 bytes)
         AD3: Gate field matches expected gate
-        AD4: Selected hypothesis present (H1/H2/H3)
+        AD4: Selected hypothesis present (H1/H2/H3/H4)
         AD5: Evidence section present (≥ 1 evidence item)
         AD6: Action plan section present
         AD7: No forward step references (source: Step N where N > step)
@@ -6044,11 +6120,11 @@ def validate_diagnosis_log(project_dir, step, gate):
     if selected_match and hypotheses_found:
         listed_h_ids = set()
         for h_text in hypotheses_found:
-            h_id_match = re.search(r"\bH[123]\b", h_text)
+            h_id_match = re.search(r"\bH[1-4]\b", h_text)
             if h_id_match:
                 listed_h_ids.add(h_id_match.group())
         selected_h_id = re.search(
-            r"\bH[123]\b", selected_match.group(1).strip()
+            r"\bH[1-4]\b", selected_match.group(1).strip()
         )
         if selected_h_id and selected_h_id.group() not in listed_h_ids:
             warnings.append(

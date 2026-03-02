@@ -38,7 +38,9 @@ STALE_ARCHIVE_SECONDS = STALE_ARCHIVE_DAYS * 24 * 3600
 # work_log.jsonl size warning threshold (1MB)
 WORK_LOG_SIZE_WARN = 1_000_000
 
-# Hook scripts to re-validate (19 scripts)
+# Hook scripts to re-validate (20 scripts)
+# NOTE: setup_init.py and setup_maintenance.py are NOT in this list — they are
+# the validators themselves (self-validating).
 # D-7: Intentionally duplicated in setup_init.py — setup scripts are
 # independent from _context_lib.py by design (no import dependency).
 REQUIRED_SCRIPTS = [
@@ -49,6 +51,7 @@ REQUIRED_SCRIPTS = [
     "diagnose_context.py",
     "generate_context_summary.py",
     "predictive_debug_guard.py",
+    "query_workflow.py",
     "restore_context.py",
     "save_context.py",
     "update_work_log.py",
@@ -292,7 +295,7 @@ def _check_doc_code_sync(project_dir):
     Prevents documentation drift where LLM follows outdated doc
     instead of correct code (NEVER DO override risk).
 
-    DC-1: CLAUDE.md NEVER DO retry limits ↔ validate_retry_budget.py constants
+    DC-1: docs/protocols/autopilot-execution.md NEVER DO retry limits ↔ validate_retry_budget.py constants
     DC-2: D-7 Risk score constants (_context_lib.py ↔ predictive_debug_guard.py)
     DC-3: D-7 ULW detection pattern (validate_retry_budget.py ↔ _context_lib.py)
 
@@ -304,15 +307,17 @@ def _check_doc_code_sync(project_dir):
 
     # --- DC-1: NEVER DO retry limits ↔ code constants ---
     budget_path = os.path.join(scripts_dir, "validate_retry_budget.py")
-    claude_path = os.path.join(project_dir, "CLAUDE.md")
+    never_do_path = os.path.join(
+        project_dir, "docs", "protocols", "autopilot-execution.md"
+    )
 
     dc1_ok = True
-    if os.path.isfile(budget_path) and os.path.isfile(claude_path):
+    if os.path.isfile(budget_path) and os.path.isfile(never_do_path):
         try:
             with open(budget_path, "r", encoding="utf-8") as f:
                 budget_src = f.read()
-            with open(claude_path, "r", encoding="utf-8") as f:
-                claude_src = f.read()
+            with open(never_do_path, "r", encoding="utf-8") as f:
+                never_do_src = f.read()
 
             # Extract code constants
             m_default = re.search(
@@ -326,11 +331,11 @@ def _check_doc_code_sync(project_dir):
                 code_default = int(m_default.group(1))
                 code_ulw = int(m_ulw.group(1))
 
-                # Extract from CLAUDE.md NEVER DO section
+                # Extract from autopilot-execution.md NEVER DO section
                 # Pattern: "최대 N회(ULW 활성 시 M회) 재시도"
                 m_doc = re.search(
                     r"최대\s*(\d+)회\s*\(ULW\s*활성\s*시\s*(\d+)회\)\s*재시도",
-                    claude_src,
+                    never_do_src,
                 )
 
                 if m_doc:
@@ -349,7 +354,7 @@ def _check_doc_code_sync(project_dir):
                     dc1_ok = False
                     results.append(_result(
                         WARNING, "WARN", "Doc-code sync: DC-1",
-                        "cannot extract retry limits from CLAUDE.md NEVER DO "
+                        "cannot extract retry limits from autopilot-execution.md NEVER DO "
                         "(expected pattern: '최대 N회(ULW 활성 시 M회) 재시도')",
                     ))
             else:
@@ -365,7 +370,7 @@ def _check_doc_code_sync(project_dir):
                 WARNING, "FAIL", "Doc-code sync: DC-1", f"read error: {e}"
             ))
 
-    if dc1_ok and os.path.isfile(budget_path) and os.path.isfile(claude_path):
+    if dc1_ok and os.path.isfile(budget_path) and os.path.isfile(never_do_path):
         results.append(_result(
             INFO, "PASS", "Doc-code sync: DC-1",
             "NEVER DO retry limits match code constants",
@@ -558,6 +563,74 @@ def _check_doc_code_sync(project_dir):
         results.append(_result(
             INFO, "PASS", "Doc-code sync: DC-4",
             "D-7 Retry limit constants synchronized",
+        ))
+
+    # --- DC-5: D-7 SOT_FILENAMES sync across 3 files ---
+    # _context_lib.py:SOT_FILENAMES ↔ setup_init.py:SOT_FILENAMES ↔ query_workflow.py:_SOT_FILENAMES
+    dc5_ok = True
+    dc5_files = {
+        "_context_lib.py": os.path.join(scripts_dir, "_context_lib.py"),
+        "setup_init.py": os.path.join(scripts_dir, "setup_init.py"),
+        "query_workflow.py": os.path.join(scripts_dir, "query_workflow.py"),
+    }
+    sot_filenames_values = {}
+    _sot_re = re.compile(r'(?:SOT_FILENAMES|_SOT_FILENAMES)\s*=\s*\(([^)]+)\)')
+    for label, fpath in dc5_files.items():
+        try:
+            if not os.path.isfile(fpath):
+                dc5_ok = False
+                results.append(_result(
+                    WARNING, "WARN", "Doc-code sync: DC-5",
+                    f"File not found: {label}",
+                ))
+                continue
+            with open(fpath, "r", encoding="utf-8") as f:
+                content = f.read()
+            matches = _sot_re.findall(content)
+            if matches:
+                # Normalize each match: strip whitespace, quotes
+                normalized = []
+                for raw in matches:
+                    items = tuple(
+                        s.strip().strip("\"'") for s in raw.split(",") if s.strip().strip("\"'")
+                    )
+                    normalized.append(items)
+                # M-1: Verify all definitions in same file are identical
+                if len(set(normalized)) > 1:
+                    dc5_ok = False
+                    results.append(_result(
+                        WARNING, "WARN", "Doc-code sync: DC-5",
+                        f"Multiple SOT_FILENAMES in {label} differ: {normalized}",
+                    ))
+                sot_filenames_values[label] = normalized[0]
+            else:
+                dc5_ok = False
+                results.append(_result(
+                    WARNING, "WARN", "Doc-code sync: DC-5",
+                    f"SOT_FILENAMES pattern not found in {label}",
+                ))
+        except Exception as e:
+            dc5_ok = False
+            results.append(_result(
+                WARNING, "FAIL", "Doc-code sync: DC-5", f"read error in {label}: {e}"
+            ))
+
+    if len(sot_filenames_values) >= 2:
+        canonical = None
+        for label, val in sot_filenames_values.items():
+            if canonical is None:
+                canonical = (label, val)
+            elif val != canonical[1]:
+                dc5_ok = False
+                results.append(_result(
+                    WARNING, "WARN", "Doc-code sync: DC-5",
+                    f"SOT_FILENAMES mismatch: {canonical[0]}={canonical[1]} vs {label}={val}",
+                ))
+
+    if dc5_ok and len(sot_filenames_values) == len(dc5_files):
+        results.append(_result(
+            INFO, "PASS", "Doc-code sync: DC-5",
+            f"D-7 SOT_FILENAMES synchronized across {len(dc5_files)} files",
         ))
 
     return results

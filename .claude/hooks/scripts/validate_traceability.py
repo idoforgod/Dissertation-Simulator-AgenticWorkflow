@@ -34,7 +34,7 @@ import sys
 
 # Add script directory to path for shared library import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _context_lib import validate_cross_step_traceability
+from _context_lib import extract_remediations, validate_cross_step_traceability
 
 
 def main():
@@ -70,6 +70,14 @@ def main():
             if vc_match:
                 verified_count = int(vc_match.group(1))
 
+    # Remediation mapping — OpenAI harness pattern: inject fix instructions
+    _REMEDIATIONS = {
+        "CT1": f"Add [trace:step-N:section-id] markers to the output file for step {step}",
+        "CT2": "Referenced step output file not found on disk — verify SOT outputs paths are correct",
+        "CT4": f"Add more trace markers to step {step} output — minimum 3 required, found fewer",
+        "CT5": f"Remove forward references — all [trace:step-N:...] markers must reference steps < {step}",
+    }
+
     # Build output
     output = {
         "valid": is_valid,
@@ -78,6 +86,11 @@ def main():
         "verified_count": verified_count,
         "warnings": list(warnings),
     }
+
+    # Extract remediation for failed checks (P1-B: central function + P1-F: self-check)
+    remediations = extract_remediations(warnings, _REMEDIATIONS)
+    if remediations:
+        output["remediations"] = remediations
 
     print(json.dumps(output, indent=2, ensure_ascii=False))
 

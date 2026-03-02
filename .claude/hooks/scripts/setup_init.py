@@ -34,7 +34,10 @@ from datetime import datetime
 # Constants
 # =============================================================================
 
-# Hook scripts that must exist and have valid Python syntax (19 scripts)
+# Hook scripts that must exist and have valid Python syntax (20 scripts)
+# NOTE: setup_init.py and setup_maintenance.py are NOT in this list — they are
+# the validators themselves (self-validating). P1-E detects them as "unregistered"
+# but this is by design, not an error.
 # D-7: Intentionally duplicated in setup_maintenance.py — setup scripts are
 # independent from _context_lib.py by design (no import dependency).
 REQUIRED_SCRIPTS = [
@@ -45,6 +48,7 @@ REQUIRED_SCRIPTS = [
     "diagnose_context.py",
     "generate_context_summary.py",
     "predictive_debug_guard.py",
+    "query_workflow.py",
     "restore_context.py",
     "save_context.py",
     "update_work_log.py",
@@ -86,13 +90,16 @@ def main():
     # 2. PyYAML availability (importlib.util.find_spec — NOT import)
     results.append(_check_pyyaml())
 
-    # 3. Hook scripts existence + syntax validation (19 scripts)
+    # 3. Hook scripts existence + syntax validation (20 scripts)
     scripts_dir = os.path.join(project_dir, ".claude", "hooks", "scripts")
     for script_name in REQUIRED_SCRIPTS:
         result = _check_script(scripts_dir, script_name)
         results.append(result)
         if result["severity"] == CRITICAL and result["status"] == "FAIL":
             has_critical = True
+
+    # 3b. REQUIRED_SCRIPTS completeness — detect unregistered .py files (P1-E)
+    results.append(_check_scripts_completeness(scripts_dir))
 
     # 4. context-snapshots/ directory
     results.append(_check_snapshots_dir(project_dir))
@@ -208,6 +215,41 @@ def _check_script(scripts_dir, script_name):
         return _result(
             CRITICAL, "FAIL", f"Script: {script_name}",
             f"cannot read: {e}",
+        )
+
+
+def _check_scripts_completeness(scripts_dir):
+    """P1-E: Detect .py files in hooks/scripts/ not registered in REQUIRED_SCRIPTS.
+
+    P1 Compliance: Deterministic filesystem scan + set comparison.
+    Ignores __pycache__/, __init__.py, test files, and self-validating setup scripts.
+    """
+    # Setup scripts are self-validating — they cannot validate themselves
+    _SELF_VALIDATING = {"setup_init.py", "setup_maintenance.py"}
+    try:
+        actual_files = set()
+        for entry in os.listdir(scripts_dir):
+            if (entry.endswith(".py")
+                    and not entry.startswith("__")
+                    and not entry.startswith("test_")
+                    and entry not in _SELF_VALIDATING
+                    and os.path.isfile(os.path.join(scripts_dir, entry))):
+                actual_files.add(entry)
+        registered = set(REQUIRED_SCRIPTS)
+        unregistered = actual_files - registered
+        if unregistered:
+            return _result(
+                WARNING, "WARN", "Scripts completeness",
+                f"Unregistered .py files (add to REQUIRED_SCRIPTS): {', '.join(sorted(unregistered))}",
+            )
+        return _result(
+            INFO, "PASS", "Scripts completeness",
+            f"All {len(actual_files)} .py files registered in REQUIRED_SCRIPTS",
+        )
+    except Exception as e:
+        return _result(
+            WARNING, "WARN", "Scripts completeness",
+            f"Cannot scan scripts directory: {e}",
         )
 
 

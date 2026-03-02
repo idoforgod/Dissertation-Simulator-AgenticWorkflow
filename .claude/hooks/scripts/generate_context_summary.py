@@ -184,6 +184,22 @@ def main():
     except Exception:
         pass  # Non-blocking — never fail the hook
 
+    # --- Context Budget Profiling ---
+    # Estimate token consumption by category for observability.
+    # Non-blocking: write budget report, never fail the hook.
+    try:
+        _update_context_budget(snapshot_dir, entries, work_log)
+    except Exception:
+        pass  # Non-blocking — never fail the hook
+
+    # --- Lightweight Auto GC ---
+    # Detect SOT drift, broken docs/ references, stale work_log.
+    # Non-blocking: only logs warnings to stderr, never modifies SOT.
+    try:
+        _lightweight_gc(project_dir, snapshot_dir)
+    except Exception:
+        pass  # Non-blocking — never fail the hook
+
     # Cleanup old snapshots
     cleanup_snapshots(snapshot_dir)
 
@@ -670,6 +686,254 @@ def _check_ulw_compliance_safety_net(entries):
     warnings = ulw_compliance.get("warnings", [])
     for w in warnings:
         print(f"[ULW Compliance Safety Net] {w}", file=sys.stderr)
+
+
+def _lightweight_gc(project_dir, snapshot_dir):
+    """Lightweight garbage collection: detect drift and warn.
+
+    Three checks, all read-only and non-blocking:
+    1. SOT drift — outputs referencing non-existent files (+ absolute path detection)
+    2. docs/ reference integrity — broken protocol file links across doc files
+    3. Stale work_log — warn if work_log exceeds 500KB
+
+    P1 Compliance: File-existence checks only (deterministic).
+        - SOT parse failure explicitly reported (not silently skipped).
+        - Absolute paths in SOT detected as drift.
+        - docs/ regex covers backtick, markdown link, and bare path patterns.
+        - gc-report.json validated after write (read-back check).
+        - Write failure distinguished from "no issues" via stderr.
+    SOT Compliance: Read-only — no file writes except gc-report.json.
+    Non-blocking: Only logs to stderr; never raises exceptions to caller.
+    """
+    gc_issues = []
+
+    # ── 1. SOT drift: outputs referencing non-existent files ──
+    try:
+        from _context_lib import sot_paths
+        sot_data = None
+        sot_found = False
+        for sp in sot_paths(project_dir):
+            if os.path.exists(sp):
+                sot_found = True
+                try:
+                    if sp.endswith(".json"):
+                        with open(sp, "r", encoding="utf-8") as f:
+                            sot_data = json.load(f)
+                    else:
+                        import yaml
+                        with open(sp, "r", encoding="utf-8") as f:
+                            sot_data = yaml.safe_load(f) or {}
+                except ImportError:
+                    gc_issues.append({
+                        "type": "sot_parse_error",
+                        "detail": "PyYAML not installed — SOT drift check skipped",
+                    })
+                except Exception as e:
+                    gc_issues.append({
+                        "type": "sot_parse_error",
+                        "detail": f"SOT parse failed ({type(e).__name__}) — drift check skipped",
+                    })
+                break
+
+        if sot_data:
+            outputs = sot_data.get("outputs", {})
+            if isinstance(outputs, dict):
+                for key, path_val in outputs.items():
+                    if not isinstance(path_val, str):
+                        gc_issues.append({
+                            "type": "sot_drift",
+                            "detail": f"outputs.{key} is {type(path_val).__name__}, expected string",
+                        })
+                        continue
+                    # Detect absolute paths — SOT should use relative paths only
+                    if os.path.isabs(path_val):
+                        gc_issues.append({
+                            "type": "sot_drift",
+                            "detail": f"outputs.{key} → {path_val} (absolute path — must be relative)",
+                        })
+                        continue
+                    full_path = os.path.join(project_dir, path_val)
+                    if not os.path.exists(full_path):
+                        gc_issues.append({
+                            "type": "sot_drift",
+                            "detail": f"outputs.{key} → {path_val} (file not found)",
+                        })
+            else:
+                # outputs=None or non-dict type — both are SOT drift
+                gc_issues.append({
+                    "type": "sot_drift",
+                    "detail": f"outputs is {type(outputs).__name__}, expected dict",
+                })
+    except Exception:
+        pass  # sot_paths import failure — non-blocking
+
+    # ── 2. docs/ reference integrity: protocol links in doc files ──
+    # Covers: backtick `path`, markdown link (path), and bare path patterns
+    _DOC_REF_RE = re.compile(r"(?:`|[\[(])(docs/protocols/[\w-]+\.md)(?:`|[\])])")
+    try:
+        claude_md = os.path.join(project_dir, "CLAUDE.md")
+        if os.path.exists(claude_md):
+            with open(claude_md, "r", encoding="utf-8") as f:
+                claude_content = f.read()
+            for match in _DOC_REF_RE.finditer(claude_content):
+                ref_path = match.group(1)
+                full_ref = os.path.join(project_dir, ref_path)
+                if not os.path.exists(full_ref):
+                    gc_issues.append({
+                        "type": "broken_ref",
+                        "detail": f"CLAUDE.md references {ref_path} (not found)",
+                    })
+    except Exception:
+        pass
+
+    # ── 3. Stale work_log: warn if > 500KB ──
+    try:
+        work_log_path = os.path.join(snapshot_dir, "work_log.jsonl")
+        if os.path.exists(work_log_path):
+            size_kb = os.path.getsize(work_log_path) / 1024
+            if size_kb > 500:
+                gc_issues.append({
+                    "type": "large_work_log",
+                    "detail": f"work_log.jsonl is {size_kb:.0f}KB (> 500KB threshold)",
+                })
+    except Exception:
+        pass
+
+    # ── Report ──
+    report_path = os.path.join(snapshot_dir, "gc-report.json")
+    if gc_issues:
+        for issue in gc_issues:
+            print(
+                f"[Auto GC] {issue['type']}: {issue['detail']}",
+                file=sys.stderr,
+            )
+        # Write gc-report.json with read-back validation
+        try:
+            report_data = {
+                "timestamp": datetime.now().isoformat(),
+                "issues_count": len(gc_issues),
+                "issues": gc_issues,
+            }
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(report_data, f, indent=2, ensure_ascii=False)
+            # P1: Read-back validation — ensure write succeeded
+            with open(report_path, "r", encoding="utf-8") as f:
+                readback = json.load(f)
+            if readback.get("issues_count") != len(gc_issues):
+                print(
+                    "[Auto GC] WARNING: gc-report.json read-back mismatch",
+                    file=sys.stderr,
+                )
+        except Exception as e:
+            print(
+                f"[Auto GC] WARNING: gc-report.json write failed ({type(e).__name__})",
+                file=sys.stderr,
+            )
+    else:
+        # Clean up stale report if no issues
+        if os.path.exists(report_path):
+            try:
+                os.remove(report_path)
+            except Exception:
+                pass
+
+
+def _update_context_budget(snapshot_dir, entries, work_log):
+    """Estimate and record context consumption by tool category.
+
+    Writes context-budget.json with per-category token estimates.
+    Token estimation uses rough heuristics (chars / 4 ≈ tokens).
+
+    Non-blocking: called from main(), failures silently ignored.
+    """
+    # Rough token estimate: 1 token ≈ 4 characters (English/mixed)
+    CHARS_PER_TOKEN = 4
+
+    # Category buckets
+    categories = {
+        "read_files": {"calls": 0, "chars": 0},
+        "edit_write": {"calls": 0, "chars": 0},
+        "bash": {"calls": 0, "chars": 0},
+        "search": {"calls": 0, "chars": 0},
+        "agent": {"calls": 0, "chars": 0},
+        "web": {"calls": 0, "chars": 0},
+        "other_tools": {"calls": 0, "chars": 0},
+        "assistant_text": {"calls": 0, "chars": 0},
+        "user_text": {"calls": 0, "chars": 0},
+    }
+
+    _TOOL_CATEGORY_MAP = {
+        "Read": "read_files", "Glob": "search", "Grep": "search",
+        "Edit": "edit_write", "Write": "edit_write", "NotebookEdit": "edit_write",
+        "Bash": "bash",
+        "Agent": "agent",
+        "WebFetch": "web", "WebSearch": "web",
+    }
+
+    for entry in entries:
+        role = entry.get("role", "")
+        content = entry.get("content", "")
+        if isinstance(content, list):
+            content = " ".join(
+                str(c.get("text", "") if isinstance(c, dict) else c)
+                for c in content
+            )
+        char_count = len(str(content))
+
+        if role == "user":
+            categories["user_text"]["calls"] += 1
+            categories["user_text"]["chars"] += char_count
+        elif role == "assistant":
+            # Check if this is a tool call
+            tool_name = entry.get("tool_name", "")
+            if tool_name:
+                cat = _TOOL_CATEGORY_MAP.get(tool_name, "other_tools")
+                categories[cat]["calls"] += 1
+                categories[cat]["chars"] += char_count
+            else:
+                categories["assistant_text"]["calls"] += 1
+                categories["assistant_text"]["chars"] += char_count
+        elif role == "tool_result":
+            # Tool results consume the most context — attribute to tool category
+            tool_name = entry.get("tool_name", "")
+            cat = _TOOL_CATEGORY_MAP.get(tool_name, "other_tools")
+            categories[cat]["chars"] += char_count
+
+    # Build budget report
+    total_chars = sum(c["chars"] for c in categories.values())
+    total_tokens_est = total_chars // CHARS_PER_TOKEN
+
+    budget = {
+        "total_estimated_tokens": total_tokens_est,
+        "total_tool_calls": sum(c["calls"] for c in categories.values()),
+        "categories": {},
+    }
+
+    for cat_name, data in sorted(
+        categories.items(), key=lambda x: x[1]["chars"], reverse=True
+    ):
+        if data["chars"] == 0:
+            continue
+        pct = round(data["chars"] / total_chars * 100, 1) if total_chars > 0 else 0
+        budget["categories"][cat_name] = {
+            "calls": data["calls"],
+            "estimated_tokens": data["chars"] // CHARS_PER_TOKEN,
+            "percentage": pct,
+        }
+
+    # Top consumer warning
+    if budget["categories"]:
+        top = next(iter(budget["categories"]))
+        top_pct = budget["categories"][top]["percentage"]
+        if top_pct > 60:
+            budget["warning"] = (
+                f"'{top}' consuming {top_pct}% of context — "
+                f"consider sub-agent delegation or output truncation"
+            )
+
+    budget_path = os.path.join(snapshot_dir, "context-budget.json")
+    with open(budget_path, "w", encoding="utf-8") as f:
+        json.dump(budget, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ import sys
 # Add script directory to path for shared library import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _context_lib import (
+    extract_remediations,
     validate_review_output,
     parse_review_verdict,
     calculate_pacs_delta,
@@ -74,6 +75,15 @@ def main():
     # pACS delta calculation
     pacs_data = calculate_pacs_delta(project_dir, step)
 
+    # Remediation mapping — OpenAI harness pattern: inject fix instructions
+    _REMEDIATIONS = {
+        "R1": f"Create review log: invoke @reviewer sub-agent → save report to review-logs/step-{step}-review.md",
+        "R2": "Review report is too small — @reviewer must include: Summary, Issues Table (≥1 row), pACS scoring, Verdict",
+        "R3": "Add missing section to review report. Required: Summary/Overview, Issues/Findings table, pACS, Verdict (PASS/FAIL)",
+        "R4": "Add explicit verdict: review must end with clear **Verdict: PASS** or **Verdict: FAIL**",
+        "R5": "Add at least 1 issue to the issues table — zero-issue PASS is not allowed (P1 rule R5)",
+    }
+
     # Build output
     output = {
         "valid": is_valid,
@@ -90,6 +100,11 @@ def main():
         "needs_reconciliation": pacs_data["needs_reconciliation"],
         "warnings": warnings,
     }
+
+    # Extract remediation for failed checks (P1-B: central function + P1-F: self-check)
+    remediations = extract_remediations(warnings, _REMEDIATIONS)
+    if remediations:
+        output["remediations"] = remediations
 
     # pACS Delta reconciliation warning
     if pacs_data["needs_reconciliation"]:

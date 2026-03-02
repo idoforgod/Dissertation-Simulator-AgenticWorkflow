@@ -27,6 +27,7 @@ import sys
 # Add script directory to path for shared library import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _context_lib import (
+    extract_remediations,
     validate_verification_log,
     verify_pacs_arithmetic,
 )
@@ -56,12 +57,24 @@ def main():
     # Core validation: V1a-V1c
     is_valid, warnings = validate_verification_log(project_dir, step)
 
+    # Remediation mapping — OpenAI harness pattern: inject fix instructions
+    _REMEDIATIONS = {
+        "V1a": f"Create verification log: verify each criterion → record PASS/FAIL with evidence → save to verification-logs/step-{step}-verify.md",
+        "V1b": "Add per-criterion results: each Verification criterion must have explicit PASS or FAIL with evidence",
+        "V1c": "Fix logical inconsistency: if any criterion is FAIL, overall result cannot be PASS. Correct the failed criteria or change overall to FAIL",
+    }
+
     # Build output
     output = {
         "valid": is_valid,
         "step": step,
         "warnings": list(warnings),
     }
+
+    # Extract remediation for failed checks (P1-B: central function + P1-F: self-check)
+    remediations = extract_remediations(warnings, _REMEDIATIONS)
+    if remediations:
+        output["remediations"] = remediations
 
     # Optional: T9 — pACS arithmetic check for this step
     if args.check_pacs:

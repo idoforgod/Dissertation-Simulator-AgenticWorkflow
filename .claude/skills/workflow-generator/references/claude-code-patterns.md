@@ -1026,7 +1026,7 @@ Autopilot의 설계 의도를 런타임에서 강화하는 하이브리드(Hook 
 | **Hook** | `generate_context_summary.py` | Stop 시 Decision Log 누락 자동 보완 + Review 누락 감지 |
 | **Hook** | `_context_lib.py` | 스냅샷에 Autopilot 상태 섹션 보존 (IMMORTAL) + Review P1 검증 함수 |
 | **Hook** | `update_work_log.py` | work_log에 autopilot 단계 추적 필드 |
-| **프롬프트** | `CLAUDE.md` | Autopilot Execution Checklist (MANDATORY) |
+| **프롬프트** | `docs/protocols/autopilot-execution.md` | Autopilot Execution Checklist (MANDATORY) |
 | **프롬프트** | 이 파일 | Anti-Skip Execution Protocol + Verification Gate 의사코드 |
 | **프롬프트** | `AGENTS.md §5.3` | Verification Protocol — 검증 기준 유형, 실행 프로토콜, 로그 형식 |
 

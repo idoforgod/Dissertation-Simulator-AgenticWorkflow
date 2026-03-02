@@ -17,12 +17,13 @@ Exit codes:
     0 — validation completed (check "valid" field for result)
     1 — argument error or fatal failure
 
-Checks (PA1-PA5):
+Checks (PA1-PA4 + T9 + PA7):
     PA1: pACS log file exists
     PA2: Minimum file size (≥ 50 bytes)
     PA3: Dimension scores present (≥ 3 dimensions, each 0-100)
     PA4: Pre-mortem section present (mandatory before scoring)
-    PA5: pACS = min(dimensions) arithmetic correctness
+    PA5/T9: pACS = min(dimensions) arithmetic correctness
+           (delegates to verify_pacs_arithmetic → emits "T9 FAIL:" prefix)
 
 Optional:
     PA6: Color zone validation (score vs declared RED/YELLOW/GREEN)
@@ -40,6 +41,7 @@ import sys
 # Add script directory to path for shared library import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _context_lib import (
+    extract_remediations,
     validate_pacs_output,
     validate_step_output,
 )
@@ -74,6 +76,20 @@ def main():
     # Core validation: PA1-PA6
     is_valid, warnings = validate_pacs_output(project_dir, step, pacs_type=args.type)
 
+    # Remediation mapping — OpenAI harness pattern: inject fix instructions
+    _REMEDIATIONS = {
+        "PA1": f"Generate pACS log: run Pre-mortem Protocol → F/C/L scoring → save to pacs-logs/step-{step}-pacs.md",
+        "PA2": "pACS log is too small — include Pre-mortem 3 questions + all dimension scores + pACS = min(F,C,L)",
+        "PA3": "Add dimension scores: F (Faithfulness), C (Completeness), L (Lucidity) each 0-100",
+        "PA4": "Add Pre-mortem section before scores — answer 3 questions per AGENTS.md §5.4",
+        "T9": "Fix pACS arithmetic: pACS must equal min(F, C, L). Recalculate and correct",
+        "PA7": f"pACS is RED (< 50) — rework required. Run: python3 .claude/hooks/scripts/validate_retry_budget.py --step {step} --gate pacs --project-dir . --check-and-increment",
+        # L0 Anti-Skip Guard remediations (used when --check-l0 is active)
+        "L0a": f"Step {step} output file missing — ensure SOT outputs.step-{step} points to an existing file",
+        "L0b": f"Step {step} output file too small (< 100 bytes) — produce complete output before advancing",
+        "L0c": f"Step {step} output file is empty/whitespace-only — generate substantive content",
+    }
+
     # Build output
     output = {
         "valid": is_valid,
@@ -82,6 +98,11 @@ def main():
         "warnings": list(warnings),
     }
 
+    # Extract remediation for failed checks (P1-B: central function + P1-F: self-check)
+    remediations = extract_remediations(warnings, _REMEDIATIONS)
+    if remediations:
+        output["remediations"] = remediations
+
     # Optional: L0 Anti-Skip Guard
     if args.check_l0:
         l0_valid, l0_warnings = validate_step_output(project_dir, step)
@@ -89,6 +110,12 @@ def main():
         output["l0_warnings"] = list(l0_warnings)
         if not l0_valid:
             output["valid"] = False
+        # L0 remediation extraction (L0a/L0b/L0c keys in _REMEDIATIONS)
+        l0_remediations = extract_remediations(l0_warnings, _REMEDIATIONS)
+        if l0_remediations:
+            existing = output.get("remediations", {})
+            existing.update(l0_remediations)
+            output["remediations"] = existing
 
     print(json.dumps(output, indent=2, ensure_ascii=False))
 

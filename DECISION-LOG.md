@@ -681,6 +681,20 @@
 - **대안**: (1) 무한 재시도(경로 C) — 기각 (I-3 안전장치 해제, 무한 루프 위험). (2) 중간 상향(경로 A, 5/7) — 기각 (사용자가 경로 B 선택)
 - **관련 파일**: `validate_retry_budget.py`, `_context_lib.py`, `restore_context.py`, `setup_maintenance.py`, `CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, Spoke 3개, `translator.md`, `fact-checker.md`, `maintenance.md`, `claude-code-patterns.md`, `state.yaml.example`
 
+### ADR-049: CLAUDE.md 경량화 — TOC 패턴 전환
+
+- **날짜**: 2026-03-01
+- **상태**: Accepted
+- **맥락**: Anthropic/OpenAI 하네스 엔지니어링 원칙 비교 분석에서 CLAUDE.md(512줄)가 매 턴마다 컨텍스트를 과도하게 소비하는 구조적 문제 발견. Anthropic 권고: "CLAUDE.md는 최소화 — Would removing this cause mistakes? If not, cut it." OpenAI 원칙: "AGENTS.md as Table of Contents (~100 lines)".
+- **결정**:
+  1. CLAUDE.md를 512줄 → 160줄로 경량화 (69% 절감) — 목차 + 필수 행동 지시만 유지
+  2. 상세 프로토콜을 `docs/protocols/`로 분리: autopilot-execution.md, quality-gates.md, ulw-mode.md, context-preservation-detail.md, code-change-protocol.md (5개 파일)
+  3. CLAUDE.md에 on-demand 참조 포인터 삽입 ("워크플로우 실행 전 반드시 읽기: docs/protocols/autopilot-execution.md")
+  4. `setup_maintenance.py` DC-1 체크 경로를 `docs/protocols/autopilot-execution.md`로 업데이트
+- **근거**: 컨텍스트 윈도우는 가장 중요한 자원. 워크플로우 실행 중에만 필요한 체크리스트(~120줄)가 일반 대화에서도 매 턴 로드되는 것은 토큰 낭비. Lazy loading(on-demand Read)으로 전환하면 비-워크플로우 세션에서 ~350줄 절감
+- **대안**: (1) CLAUDE.md 유지 + AGENTS.md만 경량화 — 기각 (CLAUDE.md가 매 턴 자동 로드되므로 경량화 효과가 더 큼). (2) 전체 내용을 @import로 자동 병합 — 기각 (Claude Code가 @import를 지원하지 않으며, 지원하더라도 항상 로드되어 lazy loading 이점 상실)
+- **관련 파일**: `CLAUDE.md`, `docs/protocols/*.md` (5개), `setup_maintenance.py`
+
 ---
 
 ## 부록: 커밋 히스토리 기반 타임라인
@@ -720,6 +734,7 @@
 | 2026-02-23 | (pending) | ADR-046: G3 — 도메인 지식 구조 (Domain Knowledge Structure) |
 | 2026-02-23 | (pending) | ADR-047: Abductive Diagnosis Layer — 품질 게이트 FAIL 시 구조화된 진단 |
 | 2026-02-23 | accepted | ADR-048: 전수조사 기반 시스템 일관성 강화 — 재시도 한도 10/15 + P1 doc-code sync + D-7 #5 |
+| 2026-03-01 | accepted | ADR-049: CLAUDE.md 경량화 — TOC 패턴 전환 (512→160줄, docs/protocols/ 분리) |
 
 ---
 

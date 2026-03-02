@@ -208,7 +208,8 @@ def _extract_brief_summary(content):
                 break
 
     # C1: Extract ULW mode presence
-    if "ULW 상태" in content or "Ultrawork Mode" in content:
+    # D-7: ULW detection pattern must match _context_lib.py + validate_retry_budget.py
+    if "ULW 상태" in content or "Ultrawork Mode State" in content:
         summary_parts.append(("ulw", "ULW (Ultrawork) Mode Active"))
 
     # C1: Extract active team info
@@ -456,7 +457,7 @@ def _build_recovery_output(source, latest_path, summary, sot_warning, snapshot_a
     # Only inject for clear/compact/resume where the same logical session continues
     if (snapshot_content
             and source != "startup"
-            and ("ULW 상태" in snapshot_content or "Ultrawork Mode" in snapshot_content)):
+            and ("ULW 상태" in snapshot_content or "Ultrawork Mode State" in snapshot_content)):
         output_lines.append("")
         output_lines.append("━━━ ULTRAWORK (ULW) MODE ACTIVE ━━━")
         output_lines.append("")

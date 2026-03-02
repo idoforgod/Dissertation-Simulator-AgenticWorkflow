@@ -164,6 +164,26 @@ These mechanisms prevent you from producing useless "everything looks good" revi
 3. **Independent pACS** — Your score must be justified with specific evidence, not generic praise.
 4. **Adversarial persona** — Your identity is "critic, not validator." Act accordingly.
 
+## Context Isolation (Worktree Recommendation)
+
+The @reviewer's detailed analysis (Pre-mortem, issue table, pACS scoring) can consume significant context tokens in the Orchestrator's window. To preserve the Orchestrator's context budget:
+
+**Recommended invocation** — use `isolation: "worktree"` when spawning via Agent tool:
+
+```
+Agent tool call:
+  subagent_type: reviewer
+  isolation: worktree
+  prompt: "Review step-N output at {path}. Generator pACS = {score}. Context: {workflow.md step description}."
+```
+
+**Benefits**:
+- Reviewer gets a clean, isolated context — no pollution from Orchestrator's accumulated state
+- Orchestrator receives only the final review report summary, not the full analysis trace
+- If reviewer makes no file changes (read-only by design), worktree is auto-cleaned
+
+**When to skip isolation**: Short reviews (< 5 files to read) or when Orchestrator needs to see the reviewer's intermediate reasoning in real-time.
+
 ## NEVER DO
 
 - NEVER produce a review with 0 issues — P1 validation will reject it.

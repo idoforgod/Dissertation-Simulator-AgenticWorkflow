@@ -36,7 +36,7 @@ import sys
 
 # Add script directory to path for shared library import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _context_lib import validate_workflow_md
+from _context_lib import extract_remediations, validate_workflow_md
 
 
 def main():
@@ -52,11 +52,28 @@ def main():
     workflow_path = os.path.abspath(args.workflow_path)
     is_valid, warnings = validate_workflow_md(workflow_path)
 
+    # Remediation mapping — OpenAI harness pattern: inject fix instructions
+    _REMEDIATIONS = {
+        "W1": f"Workflow file not found at {workflow_path} — check path",
+        "W2": "Workflow file is too small (< 500 bytes) — incomplete generation",
+        "W3": "Add '## Inherited DNA' header to workflow.md — required for DNA inheritance verification",
+        "W4": "Add Inherited Patterns table with ≥ 3 data rows under Inherited DNA section",
+        "W5": "Add '## Constitutional Principles' or '## Absolute Criteria' section",
+        "W6": "Add CAP (Coding Anchor Points) reference — mention CAP-1 through CAP-4",
+        "W7": "CT Verification-Validator mismatch: if Verification has CT criteria, add validate_traceability Post-processing",
+        "W8": "DKS Verification-Validator mismatch: if DKS references exist, add validate_domain_knowledge Post-processing",
+    }
+
     output = {
         "valid": is_valid,
         "workflow_path": workflow_path,
         "warnings": list(warnings),
     }
+
+    # Extract remediation for failed checks (P1-B: central function + P1-F: self-check)
+    remediations = extract_remediations(warnings, _REMEDIATIONS)
+    if remediations:
+        output["remediations"] = remediations
 
     print(json.dumps(output, indent=2, ensure_ascii=False))
 
