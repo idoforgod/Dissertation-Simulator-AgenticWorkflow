@@ -41,7 +41,7 @@ AgenticWorkflow/
 ├── .claude/
 │   ├── settings.json      # Hook 설정 (Setup + SessionEnd)
 │   ├── commands/           # Slash Commands (/install, /maintenance)
-│   ├── hooks/scripts/     # 21개 Python 스크립트 (Context Preservation 6 + Safety 3 + P1 Validation 10 + Setup 2)
+│   ├── hooks/scripts/     # 22개 Hook 스크립트 + Setup 2개 + 테스트 3개 (CP 6 + Safety 5 + Validation 9 + Obs/Diag 2 + Setup 2 + Test 3)
 │   ├── context-snapshots/ # 런타임 스냅샷 (gitignored)
 │   └── skills/
 │       ├── workflow-generator/ # 워크플로우 설계·생성 스킬
@@ -71,12 +71,16 @@ AgenticWorkflow/
 | `generate_context_summary.py` | Stop | 매 응답 후 증분 스냅샷 + Knowledge Archive 아카이빙 (30초 throttling, E5 Guard) |
 | `_context_lib.py` | (공유 라이브러리) | 파싱, 생성, SOT 캡처, 토큰 추정, Smart Throttling, Autopilot 상태 읽기·검증, ULW 감지·준수 검증, 절삭 상수 중앙화(10개), sot_paths() 경로 통합, 다단계 전환 감지, 결정 품질 태그 정렬, Error Taxonomy 12패턴 분류+Resolution 매칭, IMMORTAL-aware 압축+감사 추적, E5 Guard 중앙화, Knowledge Archive 통합(부분 실패 격리), KI 스키마 검증, SOT 스키마 검증, Adversarial Review P1 검증, Translation P1 검증, pACS P1 검증, Cross-Step Traceability P1 검증, Domain Knowledge P1 검증, Predictive Debugging P1, Abductive Diagnosis Layer(사전 증거 수집 + 사후 검증 + KA 아카이빙 + Fast-Path) |
 | `setup_init.py` | Setup (`--init`) | 세션 시작 전 인프라 건강 검증 (Python, PyYAML, 스크립트 구문, 디렉터리) + SOT 쓰기 패턴 검증(P1 할루시네이션 봉쇄) |
-| `setup_maintenance.py` | Setup (`--maintenance`) | 주기적 건강 검진 (stale archives, knowledge-index 무결성, work_log 크기, doc-code 동기화 검증(DC-1~DC-4)) |
+| `output_secret_filter.py` | PostToolUse (Bash\|Read) | 도구 출력 시크릿 탐지 — 3-tier 추출(tool_response→file_path→transcript), 25+ 패턴, 2-패스 스캔(raw+decoded). P1 할루시네이션 봉쇄 |
+| `security_sensitive_file_guard.py` | PostToolUse (Edit\|Write) | 보안 민감 파일 수정 경고 — `.env`, `credentials`, `*.pem` 등 12개 패턴. exit 0 (경고 전용) |
+| `setup_maintenance.py` | Setup (`--maintenance`) | 주기적 건강 검진 (stale archives, knowledge-index 무결성, work_log 크기, doc-code 동기화 검증(DC-1~DC-6)) |
 | `block_destructive_commands.py` | PreToolUse (Bash) | 위험 명령 실행 전 차단 (git push --force, git reset --hard, rm -rf / 등). exit code 2 + stderr 피드백 (P1 할루시네이션 봉쇄) |
 | `block_test_file_edit.py` | PreToolUse (Edit\|Write) | TDD 모드(`.tdd-guard` 존재) 시 테스트 파일 수정 차단. exit code 2 + stderr 피드백 |
 | `predictive_debug_guard.py` | PreToolUse (Edit\|Write) | 에러 이력 기반 위험 파일 사전 경고. `risk-scores.json` 캐시 조회 → 임계값 초과 시 stderr 경고 (exit code 0, 경고 전용) |
 | `diagnose_context.py` | (독립 스크립트) | Abductive Diagnosis 사전 증거 수집 — 품질 게이트 FAIL 시 증거 번들(retry history, upstream evidence, hypothesis priority) 수집. Orchestrator가 수동 호출 |
 | `validate_diagnosis.py` | (독립 스크립트) | Abductive Diagnosis P1 사후 검증 — AD1-AD10 구조적 무결성 검증. Orchestrator가 수동 호출 |
+
+**테스트 커버리지**: Safety Hook 3종에 대해 **131개 자동화 테스트** (output_secret_filter: 44 — 단위 22+Tier3 통합 8+Tier1 통합 9+Tier2 통합 5 / security_sensitive_file_guard: 44 / block_destructive_commands: 43). `setup_init.py`가 세션 시작 시 전체 검증, `setup_maintenance.py`가 DC-1~DC-6으로 doc-code 동기화 검증.
 
 ## Autopilot Mode
 

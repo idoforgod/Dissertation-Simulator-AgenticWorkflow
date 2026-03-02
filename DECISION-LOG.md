@@ -695,6 +695,29 @@
 - **대안**: (1) CLAUDE.md 유지 + AGENTS.md만 경량화 — 기각 (CLAUDE.md가 매 턴 자동 로드되므로 경량화 효과가 더 큼). (2) 전체 내용을 @import로 자동 병합 — 기각 (Claude Code가 @import를 지원하지 않으며, 지원하더라도 항상 로드되어 lazy loading 이점 상실)
 - **관련 파일**: `CLAUDE.md`, `docs/protocols/*.md` (5개), `setup_maintenance.py`
 
+### ADR-050: Security Hardening — 4계층 방어 체계 + claude-forge 보안 인사이트
+
+- **날짜**: 2026-03-02
+- **상태**: Accepted
+- **맥락**: claude-forge 전수조사(ADR ref: claude-forge-analysis.md)에서 6계층 보안 체계(40+ deny 패턴, 4개 보안 훅, rate-limiter, 2-패스 시크릿 스캔)를 발견. AgenticWorkflow는 1.5계층(PreToolUse 1개 + settings.json deny 0개)만 보유. 시크릿 누출, 코드 인젝션, 네트워크 유출의 3가지 취약점 확인.
+- **결정**:
+  1. **Layer 0 (settings.json deny)**: 18개 정적 차단 패턴 추가 — pipe injection(curl/wget|sh), 시스템 명령(sudo, chmod 777, osascript, crontab, mkfs, dd), 패키지 배포(npm/yarn/pnpm publish), 민감 파일 쓰기(~/.ssh/*, ~/.zshrc, ~/.bashrc, ~/.profile)
+  2. **Layer 1 (PreToolUse 확장)**: `block_destructive_commands.py`에 NETWORK_PATTERNS(curl/wget|sh) + SYSTEM_PATTERNS(dd, mkfs) 추가 — Layer 0과의 이중 방어(Defense in Depth)
+  3. **Layer 2a (PostToolUse 신규)**: `output_secret_filter.py` — transcript JSONL에서 실제 도구 출력 읽기, 25+ 시크릿 패턴 2-패스 스캔(raw + base64/URL decoded), security.log SOT(fcntl.flock 원자적 쓰기, chmod 600)
+  4. **Layer 2b (PostToolUse 신규)**: `security_sensitive_file_guard.py` — Edit|Write 대상 파일 12개 보안 패턴 검사(.env, *.pem, credentials.*, 클라우드 자격증명, K8s secret, Terraform state 등), 세션 중복제거(/tmp 마커)
+- **근거**:
+  - **CRITICAL 발견**: PostToolUse의 `tool_response`는 `{}`(빈 객체) — 원래 설계(tool_response 스캔)가 무효. transcript JSONL tail-read로 실제 출력 확보 필수.
+  - **P1 원칙 준수**: 모든 보안 판단은 결정론적 Python(regex, 문자열 매칭, JSON 파싱). AI 판단 0%.
+  - **품질 > 속도(절대 기준 1)**: 2차 성찰에서 security_sensitive_file_guard.py를 predictive_debug_guard.py에 병합하려던 속도 최적화 설계를 철회. SRP(단일 책임 원칙) 위반 — 보안과 디버깅은 독립 관심사.
+  - **SOT 준수(절대 기준 2)**: security.log를 보안 이벤트 감사 로그(audit log)로 신설. fcntl.flock으로 원자적 쓰기 보장. (4차 성찰: SOT가 아닌 audit log으로 정정 — 프로그래밍적 읽기 없음)
+  - 모든 훅에 Safety-first: 내부 오류 시 `exit(0)`(절대 Claude를 차단하지 않음).
+- **대안**:
+  - (1) claude-forge 훅 직접 포팅 → 기각 (원격 세션 전용 설계, OPENCLAW_SESSION_ID 게이팅이 로컬에서 무의미)
+  - (2) tool_response 기반 스캔 → ~~기각~~ 4차 성찰에서 재채택 (tool_response는 실제로 데이터 포함 — Bash: stdout/stderr, Read: file.content. Tier 1 추출 경로로 구현)
+  - (3) security_sensitive_file_guard를 predictive_debug_guard에 병합 → 기각 (SRP 위반, 절대 기준 1)
+- **검증**: output_secret_filter.py 44/44 테스트 통과 (단위 22 + Tier 3 통합 8 + Tier 1 통합 9 + Tier 2 통합 5), security_sensitive_file_guard.py 44/44 테스트 통과, block_destructive_commands.py 43/43 테스트 통과
+- **관련 파일**: `settings.json`, `block_destructive_commands.py`, `output_secret_filter.py`(신규), `security_sensitive_file_guard.py`(신규), `_test_secret_filter.py`(신규), `_test_sensitive_file_guard.py`(신규), `_test_block_destructive.py`(신규)
+
 ---
 
 ## 부록: 커밋 히스토리 기반 타임라인
@@ -725,6 +748,7 @@
 | 2026-02-20 | (pending) | ADR-037: 종합 감사 II — pACS P1 + L0 Anti-Skip Guard + IMMORTAL 경계 + Context Memory |
 | 2026-02-20 | (pending) | ADR-038: DNA Inheritance — 부모 게놈의 구조적 유전 |
 | 2026-02-20 | (pending) | ADR-039: Workflow.md P1 Validation — DNA 유전의 코드 수준 검증 |
+| 2026-03-02 | (pending) | ADR-050: Security Hardening — 4계층 방어 체계 + claude-forge 보안 인사이트 |
 | 2026-02-20 | (pending) | ADR-040: 종합 감사 III — 4계층 QA 집행력 강화 (C1r/C2/W4/C4s/W7) |
 | 2026-02-23 | (pending) | ADR-041: 코딩 기준점 (Coding Anchor Points, CAP-1~4) |
 | 2026-02-23 | (pending) | ADR-042: Hook 설정 Global → Project 통합 |

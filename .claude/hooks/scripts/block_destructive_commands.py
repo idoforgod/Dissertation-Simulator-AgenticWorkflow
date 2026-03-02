@@ -12,7 +12,17 @@ Path: Direct execution (standalone, NOT through context_guard.py)
 P1 Hallucination Prevention: Destructive command detection is deterministic
 (regex-based). No AI judgment needed — 100% accurate for defined patterns.
 
-Blocked patterns (from Claude Code safety guidelines):
+Blocked patterns (from Claude Code safety guidelines + ADR-049 security hardening):
+
+  Network exfiltration:
+  - curl ... | sh/bash (piping remote content to shell)
+  - wget ... | sh/bash (piping remote content to shell)
+
+  Destructive system commands:
+  - dd if= (raw disk write, irreversible)
+  - mkfs (filesystem format, destroys all data)
+
+  Git destructive operations:
   - git push --force (NOT --force-with-lease or --force-if-includes)
   - git push -f (short flag, including combined forms like -fu)
   - git reset --hard
@@ -20,6 +30,8 @@ Blocked patterns (from Claude Code safety guidelines):
   - git restore . (discards ALL changes)
   - git clean -f (removes untracked files)
   - git branch -D or --delete --force (force-deletes branch)
+
+  Catastrophic file deletion:
   - rm -rf / or rm -rf ~ (catastrophic file deletion)
 
 Known limitations:
@@ -30,13 +42,58 @@ Known limitations:
 
 Safety-first: Any unexpected internal error → exit(0) (never block Claude).
 
-ADR-031 in DECISION-LOG.md
+ADR-031 (original), ADR-050 (network/system extension) in DECISION-LOG.md
 """
 
 import json
 import re
 import sys
 from typing import Optional
+
+# ---------------------------------------------------------------------------
+# Destructive Git patterns
+# Each: (compiled_regex, stderr message for Claude self-correction)
+#
+# Regex notes:
+#   - \s before -- flags (not \b) because \b fails between space and dash
+#   - (?![-\w]) after --force to exclude --force-with-lease, --force-if-includes
+#   - \s-[a-zA-Z]*f for combined short flags (-f, -uf, -fu all match)
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Network exfiltration patterns — piping remote content to shell execution
+# ---------------------------------------------------------------------------
+NETWORK_PATTERNS = [
+    # curl piped to shell (curl ... | sh, curl ... | bash)
+    (
+        re.compile(r"\bcurl\b.*\|\s*(ba)?sh\b"),
+        "curl piped to shell is blocked. "
+        "Download the file first, inspect it, then execute manually.",
+    ),
+    # wget piped to shell (wget ... | sh, wget ... | bash)
+    (
+        re.compile(r"\bwget\b.*\|\s*(ba)?sh\b"),
+        "wget piped to shell is blocked. "
+        "Download the file first, inspect it, then execute manually.",
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Destructive system patterns — irreversible system-level operations
+# ---------------------------------------------------------------------------
+SYSTEM_PATTERNS = [
+    # dd if= (raw disk write)
+    (
+        re.compile(r"\bdd\b\s+if="),
+        "dd is blocked. "
+        "Raw disk write can cause irreversible data loss.",
+    ),
+    # mkfs (filesystem format)
+    (
+        re.compile(r"\bmkfs\b"),
+        "mkfs is blocked. "
+        "Filesystem formatting destroys all data on the target device.",
+    ),
+]
 
 # ---------------------------------------------------------------------------
 # Destructive Git patterns
@@ -151,7 +208,23 @@ def check_command(command: str) -> Optional[str]:
     """Check command against all destructive patterns.
 
     Returns block message if pattern matches, None otherwise.
+
+    Check order (most specific → broadest):
+      1. Network exfiltration (pipe-to-shell patterns)
+      2. Destructive system commands (dd, mkfs)
+      3. Git destructive operations (force push, hard reset, etc.)
+      4. Catastrophic file deletion (rm -rf /, rm -rf ~)
     """
+    # Network patterns: check entire command string (pipe-to-shell)
+    for pattern, message in NETWORK_PATTERNS:
+        if pattern.search(command):
+            return message
+
+    # System patterns: check entire command string
+    for pattern, message in SYSTEM_PATTERNS:
+        if pattern.search(command):
+            return message
+
     # Git patterns: check entire command string (regex handles flag positions)
     for pattern, message in GIT_PATTERNS:
         if pattern.search(command):

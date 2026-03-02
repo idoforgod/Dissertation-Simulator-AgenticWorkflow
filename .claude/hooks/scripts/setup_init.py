@@ -45,6 +45,8 @@ REQUIRED_SCRIPTS = [
     "block_destructive_commands.py",
     "block_test_file_edit.py",
     "context_guard.py",
+    "output_secret_filter.py",
+    "security_sensitive_file_guard.py",
     "diagnose_context.py",
     "generate_context_summary.py",
     "predictive_debug_guard.py",

@@ -78,10 +78,15 @@ AgenticWorkflow/
 │   │   ├── validate_retry_budget.py (RB1-RB3 재시도 예산)
 │   │   ├── setup_init.py            (인프라 건강 검증 + SOT 쓰기 안전)
 │   │   ├── setup_maintenance.py     (주기적 건강 검진)
-│   │   ├── block_destructive_commands.py (위험 명령 차단, exit 2)
+│   │   ├── block_destructive_commands.py (위험 명령+네트워크+시스템 차단, exit 2)
 │   │   ├── block_test_file_edit.py  (TDD Guard, .tdd-guard 토글)
 │   │   ├── predictive_debug_guard.py (위험 파일 경고, exit 0)
-│   │   └── query_workflow.py        (워크플로우 관측성 — dashboard/weakest/retry/blocked, P1: SOT 스키마 검증 + context-aware pACS 추출)
+│   │   ├── output_secret_filter.py  (시크릿 탐지, 3-tier 추출, 25+ 패턴, 2-패스 스캔, 131 테스트)
+│   │   ├── security_sensitive_file_guard.py (보안 민감 파일 경고, 12 패턴)
+│   │   ├── query_workflow.py        (워크플로우 관측성 — dashboard/weakest/retry/blocked, P1: SOT 스키마 검증 + context-aware pACS 추출)
+│   │   ├── _test_secret_filter.py   (output_secret_filter 테스트 — 44개)
+│   │   ├── _test_sensitive_file_guard.py (security_sensitive_file_guard 테스트 — 44개)
+│   │   └── _test_block_destructive.py (block_destructive_commands 테스트 — 43개)
 │   ├── context-snapshots/           ← 런타임 (gitignored)
 │   └── skills/
 │       ├── workflow-generator/      (워크플로우 설계·생성)
@@ -99,11 +104,13 @@ AgenticWorkflow/
 |------------|---------|------|
 | Setup (`--init`) | `setup_init.py` | 인프라 건강 검증 + SOT 쓰기 안전 + 런타임 디렉터리 생성 |
 | Setup (`--maintenance`) | `setup_maintenance.py` | 주기적 건강 검진 + doc-code 동기화 |
-| PreToolUse (Bash) | `block_destructive_commands.py` | 위험 명령 차단 (exit 2) |
+| PreToolUse (Bash) | `block_destructive_commands.py` | 위험 명령 차단 — 네트워크 유출+시스템 파괴+Git 파괴+치명적 rm (exit 2) |
 | PreToolUse (Edit\|Write) | `block_test_file_edit.py` | TDD 모드 시 테스트 파일 보호 (exit 2) |
 | PreToolUse (Edit\|Write) | `predictive_debug_guard.py` | 에러 이력 기반 위험 파일 경고 |
 | SessionStart | `restore_context.py` | RLM 포인터 + 과거 세션 인덱스 + Predictive Debugging 캐시 |
-| PostToolUse | `update_work_log.py` | 9개 도구 작업 로그 누적 |
+| PostToolUse (9개 도구) | `update_work_log.py` | 작업 로그 누적 |
+| PostToolUse (Bash\|Read) | `output_secret_filter.py` | 시크릿 탐지 (3-tier 추출, 25+ 패턴, 2-패스 스캔) |
+| PostToolUse (Edit\|Write) | `security_sensitive_file_guard.py` | 보안 민감 파일 수정 경고 |
 | Stop | `generate_context_summary.py` | 증분 스냅샷 + Knowledge Archive + 안전망 |
 | PreCompact | `save_context.py` | 압축 전 스냅샷 저장 |
 | SessionEnd | `save_context.py` | `/clear` 시 전체 스냅샷 저장 |

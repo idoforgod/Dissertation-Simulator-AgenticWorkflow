@@ -48,6 +48,8 @@ REQUIRED_SCRIPTS = [
     "block_destructive_commands.py",
     "block_test_file_edit.py",
     "context_guard.py",
+    "output_secret_filter.py",
+    "security_sensitive_file_guard.py",
     "diagnose_context.py",
     "generate_context_summary.py",
     "predictive_debug_guard.py",
@@ -298,6 +300,7 @@ def _check_doc_code_sync(project_dir):
     DC-1: docs/protocols/autopilot-execution.md NEVER DO retry limits ↔ validate_retry_budget.py constants
     DC-2: D-7 Risk score constants (_context_lib.py ↔ predictive_debug_guard.py)
     DC-3: D-7 ULW detection pattern (validate_retry_budget.py ↔ _context_lib.py)
+    DC-6: Hook configuration consistency (settings.json hook scripts ↔ CLAUDE.md Hook table)
 
     Read-only: no SOT access, no RLM data mutation, no atomic_write calls.
     Returns list of _result() dicts (extends results, not appends single).
@@ -631,6 +634,106 @@ def _check_doc_code_sync(project_dir):
         results.append(_result(
             INFO, "PASS", "Doc-code sync: DC-5",
             f"D-7 SOT_FILENAMES synchronized across {len(dc5_files)} files",
+        ))
+
+    # --- DC-6: Hook configuration consistency ---
+    # settings.json hook scripts ↔ CLAUDE.md Hook event table
+    # Prevents: adding a hook script to settings.json but forgetting to
+    # document it in CLAUDE.md (exactly the error found in ADR-050 reflection).
+    #
+    # Dispatcher handling: context_guard.py dispatches to child scripts
+    # (generate_context_summary.py, update_work_log.py, etc.).
+    # settings.json references context_guard.py, while CLAUDE.md documents
+    # the dispatched scripts. DC-6 resolves this by reading context_guard.py's
+    # DISPATCH dict to build the effective script set.
+    dc6_ok = True
+    settings_path = os.path.join(project_dir, ".claude", "settings.json")
+    claude_md_path = os.path.join(project_dir, "CLAUDE.md")
+    guard_path = os.path.join(scripts_dir, "context_guard.py")
+
+    if os.path.isfile(settings_path) and os.path.isfile(claude_md_path):
+        try:
+            import json as _json
+            with open(settings_path, "r", encoding="utf-8") as f:
+                settings = _json.load(f)
+
+            # Extract all hook script filenames from settings.json
+            settings_scripts = set()
+            _script_re = re.compile(r'hooks/scripts/([a-zA-Z_]\w*\.py)')
+            hooks_config = settings.get("hooks", {})
+            for _hook_type, hook_groups in hooks_config.items():
+                if not isinstance(hook_groups, list):
+                    continue
+                for group in hook_groups:
+                    for hook in group.get("hooks", []):
+                        cmd = hook.get("command", "")
+                        for m in _script_re.finditer(cmd):
+                            settings_scripts.add(m.group(1))
+
+            # Resolve context_guard.py dispatcher → dispatched scripts
+            # Read DISPATCH dict from context_guard.py to get child scripts
+            dispatched_scripts = set()
+            if "context_guard.py" in settings_scripts and os.path.isfile(guard_path):
+                with open(guard_path, "r", encoding="utf-8") as f:
+                    guard_src = f.read()
+                # Extract script filenames from DISPATCH = { ... } entries
+                # Pattern: ("script_name.py", [...])
+                for m in re.finditer(
+                    r'\("([a-zA-Z_]\w*\.py)"', guard_src
+                ):
+                    dispatched_scripts.add(m.group(1))
+
+            # Build effective set: replace dispatcher with dispatched scripts
+            effective_scripts = (
+                (settings_scripts - {"context_guard.py"}) | dispatched_scripts
+            )
+
+            # Extract script filenames mentioned in CLAUDE.md Hook event table
+            with open(claude_md_path, "r", encoding="utf-8") as f:
+                claude_md = f.read()
+
+            table_match = re.search(
+                r'\|\s*Hook 이벤트.*?\n(.*?)(?=\n##|\n\*\*필수)',
+                claude_md,
+                re.DOTALL,
+            )
+            claude_scripts = set()
+            if table_match:
+                table_text = table_match.group(1)
+                for m in re.finditer(r'`([a-zA-Z_]\w*\.py)`', table_text):
+                    claude_scripts.add(m.group(1))
+
+            # Compare: effective scripts NOT in CLAUDE.md
+            missing_in_doc = effective_scripts - claude_scripts
+            if missing_in_doc:
+                dc6_ok = False
+                results.append(_result(
+                    WARNING, "WARN", "Doc-code sync: DC-6",
+                    f"Hook scripts in settings.json but NOT in CLAUDE.md table: "
+                    f"{', '.join(sorted(missing_in_doc))}",
+                ))
+
+            # Reverse: documented but not in effective settings
+            extra_in_doc = claude_scripts - effective_scripts
+            if extra_in_doc:
+                dc6_ok = False
+                results.append(_result(
+                    WARNING, "WARN", "Doc-code sync: DC-6",
+                    f"Scripts in CLAUDE.md table but NOT in settings.json: "
+                    f"{', '.join(sorted(extra_in_doc))}",
+                ))
+
+        except Exception as e:
+            dc6_ok = False
+            results.append(_result(
+                WARNING, "FAIL", "Doc-code sync: DC-6", f"read error: {e}"
+            ))
+
+    if dc6_ok and os.path.isfile(settings_path) and os.path.isfile(claude_md_path):
+        results.append(_result(
+            INFO, "PASS", "Doc-code sync: DC-6",
+            f"Hook configuration consistent: {len(effective_scripts)} effective scripts "
+            f"↔ {len(claude_scripts)} documented",
         ))
 
     return results

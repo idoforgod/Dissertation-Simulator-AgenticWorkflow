@@ -1,4 +1,27 @@
 {
+  "permissions": {
+    "deny": [
+      "Bash(curl *|*sh)",
+      "Bash(curl *|*bash)",
+      "Bash(wget *|*sh)",
+      "Bash(wget *|*bash)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Bash(chmod -R 777 *)",
+      "Bash(osascript *)",
+      "Bash(crontab -e*)",
+      "Bash(crontab -r*)",
+      "Bash(mkfs *)",
+      "Bash(dd if=*)",
+      "Bash(npm publish*)",
+      "Bash(yarn publish*)",
+      "Bash(pnpm publish*)",
+      "Write(~/.ssh/*)",
+      "Write(~/.zshrc)",
+      "Write(~/.bashrc)",
+      "Write(~/.profile)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {
@@ -19,6 +42,26 @@
             "type": "command",
             "command": "if test -f \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scripts/context_guard.py; then python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scripts/context_guard.py --mode=post-tool; fi",
             "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if test -f \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scripts/output_secret_filter.py; then python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scripts/output_secret_filter.py; fi",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if test -f \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scripts/security_sensitive_file_guard.py; then python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scripts/security_sensitive_file_guard.py; fi",
+            "timeout": 10
           }
         ]
       }

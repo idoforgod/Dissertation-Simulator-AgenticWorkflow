@@ -291,11 +291,22 @@ AgenticWorkflow/
 │   │   ├── block_destructive_commands.py (PreToolUse Safety Hook — 위험 명령 차단(P1 할루시네이션 봉쇄), exit code 2로 차단 + Claude 자기 수정)
 │   │   ├── block_test_file_edit.py  (PreToolUse TDD Guard — 테스트 파일 수정 차단(.tdd-guard 토글), exit code 2로 차단 + 구현 코드 수정 유도)
 │   │   ├── predictive_debug_guard.py (PreToolUse Predictive Debug — 에러 이력 기반 위험 파일 경고, exit code 0 경고 전용)
-│   │   ├── validate_pacs.py    (pACS P1 검증 + L0 Anti-Skip Guard — 독립 실행 스크립트, JSON 출력)
-│   │   ├── validate_review.py (Adversarial Review P1 검증 — 독립 실행 스크립트, JSON 출력)
+│   │   ├── output_secret_filter.py  (PostToolUse 시크릿 탐지 — 3-tier 추출(tool_response→file read→transcript), 25+ regex 패턴, 2-패스 스캔(raw+base64/URL), fcntl-locked 감사 로그, exit code 0 경고 전용)
+│   │   ├── security_sensitive_file_guard.py (PostToolUse 보안 민감 파일 경고 — .env/PEM/credentials/cloud/K8s/terraform 등 12 패턴, 세션 dedup, exit code 0 경고 전용)
+│   │   ├── diagnose_context.py  (Abductive Diagnosis 사전 증거 수집 — 품질 게이트 FAIL 시 증거 번들 생성, Orchestrator 수동 호출)
+│   │   ├── query_workflow.py    (워크플로우 관측성 — dashboard/weakest/retry/blocked 4모드, P1 SOT 스키마 검증 + context-aware pACS 추출)
+│   │   ├── validate_pacs.py    (pACS P1 검증 + L0 Anti-Skip Guard — PA1-PA7, 독립 실행 스크립트, JSON 출력)
+│   │   ├── validate_review.py (Adversarial Review P1 검증 — R1-R5, 독립 실행 스크립트, JSON 출력)
 │   │   ├── validate_translation.py (Translation P1 검증 — T1-T9 + glossary 검증, JSON 출력)
 │   │   ├── validate_verification.py (Verification Log P1 검증 — V1a-V1c 구조적 무결성, JSON 출력)
-│   │   └── validate_retry_budget.py (Retry Budget P1 검증 — RB1-RB3 재시도 예산 판정(ULW-aware), JSON 출력)
+│   │   ├── validate_diagnosis.py (Abductive Diagnosis P1 사후 검증 — AD1-AD10, JSON 출력)
+│   │   ├── validate_traceability.py (Cross-Step Traceability P1 검증 — CT1-CT5, JSON 출력)
+│   │   ├── validate_domain_knowledge.py (Domain Knowledge P1 검증 — DK1-DK7, JSON 출력)
+│   │   ├── validate_workflow.py (DNA 유전 P1 검증 — W1-W8, JSON 출력)
+│   │   ├── validate_retry_budget.py (Retry Budget P1 검증 — RB1-RB3 재시도 예산 판정(ULW-aware), JSON 출력)
+│   │   ├── _test_secret_filter.py   (output_secret_filter 테스트 — 44개)
+│   │   ├── _test_sensitive_file_guard.py (security_sensitive_file_guard 테스트 — 44개)
+│   │   └── _test_block_destructive.py (block_destructive_commands 테스트 — 43개)
 │   ├── context-snapshots/     ← 런타임 스냅샷 (gitignored)
 │   └── skills/
 │       ├── workflow-generator/   ← 워크플로우 설계·생성
@@ -334,6 +345,8 @@ AgenticWorkflow/
 
 ```
 작업 진행 중 ─→ [PostToolUse] update_work_log.py ─→ work_log.jsonl 누적 (9개 도구 추적)
+             ├→ [PostToolUse] output_secret_filter.py ─→ Bash|Read 출력 시크릿 탐지 (3-tier 추출, 25+ 패턴, 독립 실행)
+             └→ [PostToolUse] security_sensitive_file_guard.py ─→ Edit|Write 민감 파일 경고 (독립 실행)
                                                      │ (토큰 75% 초과 시)
                                                      ↓
 응답 완료 ────→ [Stop] generate_context_summary.py ─→ latest.md 저장 (30초 throttling)
