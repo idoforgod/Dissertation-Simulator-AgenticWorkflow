@@ -390,6 +390,15 @@
 - **대안**: 한국어로 직접 생성 → 기각 (품질 저하), 언어 선택을 사용자에게 위임 → 기각 (일관성 없음)
 - **관련 커밋**: `5b649cb` feat: Hub-and-Spoke universal system prompt
 
+#### ADR-027a: English-First 강제 격상 (Amendment)
+
+- **날짜**: 2026-03-05
+- **상태**: Accepted (ADR-027 amendment)
+- **맥락**: English-First가 "권장" 수준으로 운영되고 있었으나, 사용자가 이를 절대 기준과 동급의 강제 사항으로 격상 요청. 토큰 효율성(한국어 2-3배), 할루시네이션 감소, 일관성 보장이 근거.
+- **결정**: (1) CLAUDE.md, AGENTS.md §5.2/§8, GEMINI.md에 "MANDATORY" 강제 선언 추가. (2) workflow-template.md Inherited Patterns에 English-First 행 추가 (자식 워크플로우 유전 보장). (3) validate_workflow.py에 W9 검증 규칙 추가 (P1 할루시네이션 봉쇄). (4) soul.md는 미변경 — English-First는 "헌법(절대 기준 1)" 유전자의 발현이지 독립 유전자가 아님.
+- **근거**: 절대 기준 1(품질) 강화. "영어 먼저 완성 → 번역" 순서를 역전 불가로 고정하여 품질 바닥선 보장.
+- **영향**: 문서 4개 동기화 + P1 코드 1개(W9) + 문서-코드 동기화 1개. 기존 W1-W8, RLM 패턴, SOT 구조 미접촉.
+
 ### ADR-028: @translator 서브에이전트 + glossary 영속 상태
 
 - **날짜**: 2026-02-17

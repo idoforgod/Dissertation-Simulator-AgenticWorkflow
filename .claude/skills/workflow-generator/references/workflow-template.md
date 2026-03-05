@@ -43,6 +43,7 @@ workflow.md 파일의 표준 구조.
 | Adversarial Review | `@reviewer` + `@fact-checker` — Enhanced L2 independent quality critique |
 | Decision Log | `autopilot-logs/` — transparent decision tracking |
 | Context Preservation | Snapshot + Knowledge Archive + RLM restoration |
+| English-First Execution | All agents work in English; `@translator` for localization (MANDATORY) |
 
 **Domain-Specific Gene Expression**:
 [이 워크플로우에서 특히 강하게 발현되는 DNA 구성요소를 기술. 예: 리서치 워크플로우는 P1(데이터 정제) 유전자가 강하게 발현]

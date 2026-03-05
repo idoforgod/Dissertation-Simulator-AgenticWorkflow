@@ -5085,7 +5085,7 @@ def _normalize_to_relative(filename, project_dir, modified_files):
 
 
 # ---------------------------------------------------------------------------
-# Workflow.md DNA Inheritance P1 Validation (W1-W8)
+# Workflow.md DNA Inheritance P1 Validation (W1-W9)
 # ---------------------------------------------------------------------------
 
 # Module-level compiled regex for W3/W4 checks (process-lifetime, one-time cost)
@@ -5121,10 +5121,14 @@ _WORKFLOW_DKS_VERIFICATION_RE = re.compile(
 _WORKFLOW_DKS_POSTPROCESS_RE = re.compile(
     r"validate_domain_knowledge", re.IGNORECASE,
 )
+# W9: English-First Execution DNA — mandatory presence in Inherited Patterns
+_WORKFLOW_ENGLISH_FIRST_RE = re.compile(
+    r"English[- ]?First", re.IGNORECASE,
+)
 
 
 def validate_workflow_md(workflow_path):
-    """W1-W8: Generated workflow.md structural integrity for DNA inheritance.
+    """W1-W9: Generated workflow.md structural integrity for DNA inheritance.
 
     P1 Compliance: All validation is deterministic (regex + string checks).
     SOT Compliance: Read-only — no file writes.
@@ -5140,6 +5144,7 @@ def validate_workflow_md(workflow_path):
           post-processing must be present (Verification-Validator consistency)
       W8: If workflow references domain knowledge, validate_domain_knowledge
           post-processing must be present (Verification-Validator consistency)
+      W9: English-First Execution pattern present in Inherited DNA section
 
     Args:
         workflow_path: Absolute path to generated workflow.md
@@ -5219,6 +5224,15 @@ def validate_workflow_md(workflow_path):
                 "W8 FAIL: Workflow references domain knowledge structure but "
                 "has no validate_domain_knowledge.py Post-processing command"
             )
+
+    # W9: English-First Execution DNA — MANDATORY presence
+    # English-First is an expression of Quality Absolutism (absolute criterion 1)
+    # applied to language choice. All child workflows must inherit this pattern.
+    if not _WORKFLOW_ENGLISH_FIRST_RE.search(content):
+        warnings.append(
+            "W9 FAIL: English-First Execution pattern not found in workflow. "
+            "Add 'English-First Execution' row to Inherited Patterns table"
+        )
 
     has_fail = any("FAIL" in w for w in warnings)
     return (not has_fail, warnings)

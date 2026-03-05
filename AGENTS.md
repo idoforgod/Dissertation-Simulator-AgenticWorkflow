@@ -302,7 +302,7 @@ AgenticWorkflow/
 │   │   ├── validate_diagnosis.py (Abductive Diagnosis P1 사후 검증 — AD1-AD10, JSON 출력)
 │   │   ├── validate_traceability.py (Cross-Step Traceability P1 검증 — CT1-CT5, JSON 출력)
 │   │   ├── validate_domain_knowledge.py (Domain Knowledge P1 검증 — DK1-DK7, JSON 출력)
-│   │   ├── validate_workflow.py (DNA 유전 P1 검증 — W1-W8, JSON 출력)
+│   │   ├── validate_workflow.py (DNA 유전 P1 검증 — W1-W9, JSON 출력)
 │   │   ├── validate_retry_budget.py (Retry Budget P1 검증 — RB1-RB3 재시도 예산 판정(ULW-aware), JSON 출력)
 │   │   ├── _test_secret_filter.py   (output_secret_filter 테스트 — 44개)
 │   │   ├── _test_sensitive_file_guard.py (security_sensitive_file_guard 테스트 — 44개)
@@ -520,9 +520,11 @@ workflow:
 
 상세: `docs/protocols/ulw-mode.md`
 
-### 5.2 English-First 실행 및 번역 프로토콜
+### 5.2 English-First 실행 및 번역 프로토콜 (MANDATORY)
 
-워크플로우 **실행** 시 모든 에이전트는 **영어로 작업**하고 **영어로 산출물**을 생성한다. AI는 영어에서 가장 높은 성능을 발휘하므로, 영어 우선 실행은 **절대 기준 1(품질)**의 직접적 구현이다.
+> **이 프로토콜은 절대 기준과 동급의 강제 사항이다. 예외 없이 반드시 준수한다.**
+
+워크플로우 **실행** 시 모든 에이전트는 **영어로 작업**하고 **영어로 산출물**을 생성한다. AI는 영어에서 가장 높은 성능을 발휘하므로, 영어 우선 실행은 **절대 기준 1(품질)**의 직접적 구현이다. **최종 결과물은 반드시 영어로 먼저 완성한 후, `@translator`로 한국어 번역을 생성한다. 이 순서는 역전 불가.**
 
 #### 언어 경계
 
@@ -1179,9 +1181,19 @@ LLM 진단을 건너뛰는 결정론적 단축 경로:
 
 ## 8. 언어 및 스타일
 
-- **프레임워크 문서·사용자 대화**: 한국어
-- **워크플로우 실행**: 영어 (AI 성능 극대화 — 절대 기준 1 근거). 상세: §5.2
-- **최종 산출물**: 영어 원본 + 한국어 번역 쌍
+### 핵심 지침: English-First 강제 (MANDATORY)
+
+> **이 규칙은 절대 기준과 동급의 강제 사항이다. 예외 없이 반드시 준수한다.**
+>
+> - **워크플로우 전체 진행 단계**: 영어 (강제)
+> - **에이전트 작업·산출물**: 영어 (강제)
+> - **최종 결과물**: 영어 원본 먼저 완성 → `@translator`로 한국어 번역 (순서 역전 불가)
+>
+> **근거**: 토큰 효율성(한국어 2-3배), 정확도·할루시네이션·일관성 모두 영어가 우위. 절대 기준 1(품질)의 직접적 구현.
+
+상세: §5.2 (English-First 실행 및 번역 프로토콜)
+
+- **프레임워크 문서·사용자 대화**: 한국어 (허용)
 - **기술 용어**: 영어 유지 (SOT, Agent, Orchestrator, Hooks 등)
 - **시각화**: Mermaid 다이어그램 선호
 - **서술 깊이**: 간략 요약보다 포괄적·데이터 기반 서술 선호

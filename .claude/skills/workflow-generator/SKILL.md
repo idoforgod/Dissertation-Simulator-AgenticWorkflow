@@ -340,7 +340,7 @@ Orchestrator (품질 조율 및 전체 흐름 관리)
     - "이 단계를 자동화하면 품질이 더 안정적인가?" — 자동화 기회 발굴
     - "품질을 높이기 위해 추가해야 할 단계가 있는가?" — 검증/보강 단계 추가
     - "각 `Verification` 기준이 **파이프라인 연결**을 포함하는가?" — 단계 간 데이터 흐름 검증
-    - **DNA Inheritance P1 검증**: `python3 .claude/hooks/scripts/validate_workflow.py --workflow-path ./workflow.md` 실행 → W1-W8 통과 확인
+    - **DNA Inheritance P1 검증**: `python3 .claude/hooks/scripts/validate_workflow.py --workflow-path ./workflow.md` 실행 → W1-W9 통과 확인 (W9: English-First Execution 필수)
     - 참조: `prompt/distill-partner.md`
 
 ## Autopilot Mode 지원

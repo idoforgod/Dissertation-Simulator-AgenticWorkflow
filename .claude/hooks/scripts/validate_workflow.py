@@ -15,7 +15,7 @@ Exit codes:
     0 — validation completed (check "valid" field for result)
     1 — argument error or fatal failure
 
-Checks (W1-W8):
+Checks (W1-W9):
     W1: Workflow file exists and is readable
     W2: Minimum file size (≥ 500 bytes)
     W3: Inherited DNA header present
@@ -24,6 +24,7 @@ Checks (W1-W8):
     W6: Coding Anchor Points (CAP) reference present
     W7: Cross-step traceability Verification-Validator consistency
     W8: Domain knowledge Verification-Validator consistency
+    W9: English-First Execution pattern present
 
 P1 Compliance: All validation is deterministic (delegates to _context_lib).
 SOT Compliance: Read-only — no file writes.
@@ -62,6 +63,7 @@ def main():
         "W6": "Add CAP (Coding Anchor Points) reference — mention CAP-1 through CAP-4",
         "W7": "CT Verification-Validator mismatch: if Verification has CT criteria, add validate_traceability Post-processing",
         "W8": "DKS Verification-Validator mismatch: if DKS references exist, add validate_domain_knowledge Post-processing",
+        "W9": "Add 'English-First Execution' row to Inherited Patterns table — MANDATORY DNA pattern (ADR-027a)",
     }
 
     output = {

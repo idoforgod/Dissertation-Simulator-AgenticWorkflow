@@ -105,7 +105,7 @@ SessionStart와 Stop hook 양쪽에서 실행.
 독립 실행 스크립트: `validate_domain_knowledge.py`. 선택적 — 모든 워크플로우가 필요로 하지 않음.
 
 ### (14) Workflow.md DNA Inheritance P1 검증
-`validate_workflow_md()` — 8항목:
-- W1: 파일 존재, W2: 최소 크기 500 bytes, W3: `## Inherited DNA` 헤더, W4: Inherited Patterns 테이블 ≥ 3행, W5: Constitutional Principles 섹션, W6: CAP 참조, W7: CT Verification-Validator 정합성, W8: DKS Verification-Validator 정합성
+`validate_workflow_md()` — 9항목:
+- W1: 파일 존재, W2: 최소 크기 500 bytes, W3: `## Inherited DNA` 헤더, W4: Inherited Patterns 테이블 ≥ 3행, W5: Constitutional Principles 섹션, W6: CAP 참조, W7: CT Verification-Validator 정합성, W8: DKS Verification-Validator 정합성, W9: English-First Execution 패턴 존재 (ADR-027a)
 
 독립 실행 스크립트: `validate_workflow.py`. workflow-generator 완료 후 수동 호출.

@@ -315,6 +315,7 @@ def _check_doc_code_sync(project_dir):
     DC-2: D-7 Risk score constants (_context_lib.py ↔ predictive_debug_guard.py)
     DC-3: D-7 ULW detection pattern (validate_retry_budget.py ↔ _context_lib.py)
     DC-6: Hook configuration consistency (settings.json hook scripts ↔ CLAUDE.md Hook table)
+    DC-7: English-First MANDATORY Hub-and-Spoke sync (AGENTS.md ↔ 5 Spoke files) — ADR-027a
 
     Read-only: no SOT access, no RLM data mutation, no atomic_write calls.
     Returns list of _result() dicts (extends results, not appends single).
@@ -748,6 +749,90 @@ def _check_doc_code_sync(project_dir):
             INFO, "PASS", "Doc-code sync: DC-6",
             f"Hook configuration consistent: {len(effective_scripts)} effective scripts "
             f"↔ {len(claude_scripts)} documented",
+        ))
+
+    # --- DC-7: English-First MANDATORY Hub-and-Spoke synchronization ---
+    # Hub: AGENTS.md §5.2 — the authoritative source for English-First policy.
+    # Spokes: CLAUDE.md, GEMINI.md, copilot-instructions.md,
+    #          agenticworkflow.mdc, workflow-template.md
+    # If Hub has "MANDATORY" in its English-First section, all Spokes must too.
+    # ADR-027a: English-First elevated to absolute-criteria-level enforcement.
+    _ENGLISH_FIRST_MANDATORY_RE = re.compile(
+        r"English[- ]?First.*MANDATORY|MANDATORY.*English[- ]?First",
+        re.IGNORECASE,
+    )
+
+    dc7_spoke_files = {
+        "CLAUDE.md": os.path.join(project_dir, "CLAUDE.md"),
+        "GEMINI.md": os.path.join(project_dir, "GEMINI.md"),
+        "copilot-instructions.md": os.path.join(
+            project_dir, ".github", "copilot-instructions.md"
+        ),
+        "agenticworkflow.mdc": os.path.join(
+            project_dir, ".cursor", "rules", "agenticworkflow.mdc"
+        ),
+        "workflow-template.md": os.path.join(
+            project_dir, ".claude", "skills", "workflow-generator",
+            "references", "workflow-template.md"
+        ),
+    }
+
+    dc7_hub_path = os.path.join(project_dir, "AGENTS.md")
+    dc7_ok = True
+
+    if os.path.isfile(dc7_hub_path):
+        try:
+            with open(dc7_hub_path, "r", encoding="utf-8") as f:
+                hub_content = f.read()
+
+            hub_has_mandatory = bool(
+                _ENGLISH_FIRST_MANDATORY_RE.search(hub_content)
+            )
+
+            if hub_has_mandatory:
+                missing_spokes = []
+                for spoke_label, spoke_path in dc7_spoke_files.items():
+                    if not os.path.isfile(spoke_path):
+                        continue
+                    with open(spoke_path, "r", encoding="utf-8") as f:
+                        spoke_content = f.read()
+                    # workflow-template.md uses "MANDATORY" in Inherited
+                    # Patterns table, not in a heading — check for either
+                    # "English-First" + "MANDATORY" anywhere, or just
+                    # "English-First" for the template (which has it as a
+                    # table row with MANDATORY in the same line).
+                    spoke_has = bool(
+                        _ENGLISH_FIRST_MANDATORY_RE.search(spoke_content)
+                    ) or (
+                        spoke_label == "workflow-template.md"
+                        and re.search(
+                            r"English[- ]?First.*MANDATORY",
+                            spoke_content,
+                            re.IGNORECASE,
+                        )
+                    )
+                    if not spoke_has:
+                        missing_spokes.append(spoke_label)
+
+                if missing_spokes:
+                    dc7_ok = False
+                    results.append(_result(
+                        WARNING, "WARN", "Doc-code sync: DC-7",
+                        f"English-First MANDATORY in Hub (AGENTS.md) but "
+                        f"missing in Spokes: {', '.join(missing_spokes)}",
+                    ))
+            # If Hub doesn't have MANDATORY, no sync needed — skip silently
+
+        except Exception as e:
+            dc7_ok = False
+            results.append(_result(
+                WARNING, "FAIL", "Doc-code sync: DC-7", f"read error: {e}"
+            ))
+
+    if dc7_ok and os.path.isfile(dc7_hub_path):
+        results.append(_result(
+            INFO, "PASS", "Doc-code sync: DC-7",
+            "English-First MANDATORY synchronized across Hub and Spokes",
         ))
 
     return results
