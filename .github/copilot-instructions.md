@@ -19,7 +19,7 @@ Copilot CLI는 `AGENTS.md`를 자동으로 인식하므로, 해당 파일의 모
 
 1. **품질 최우선** — 속도, 비용, 작업량보다 최종 결과물의 품질이 유일한 기준
 2. **단일 파일 SOT** — 모든 공유 상태는 단일 파일에 집중. 쓰기 권한은 Orchestrator만
-3. **코드 변경 프로토콜 (MANDATORY)** — 의도 파악 → 영향 범위 분석 → 변경 설계 3단계 수행. 이 프로토콜을 건너뛴 코드 변경은 무효다. 분석 깊이는 변경 규모에 비례. **코딩 기준점(CAP-1~4)**: 코딩 전 사고, 단순성 우선, 목표 기반 실행, 외과적 변경
+3. **코드 변경 프로토콜 (MANDATORY)** — 의도 파악 → 영향 범위 분석 → 변경 설계 3단계 수행. 이 프로토콜을 건너뛴 코드 변경은 무효다. 분석 깊이는 변경 규모에 비례. **Coding Anchor Points (CAP-1~4)**: Think before coding, Simplicity first, Goal-driven execution, Surgical changes
 
 > **상세 내용**: AGENTS.md §2 참조.
 

@@ -64,6 +64,10 @@ HUB_SPOKE_MAP: Dict[str, Dict] = {
             "AGENTICWORKFLOW-USER-MANUAL.md",
             "AGENTICWORKFLOW-ARCHITECTURE-AND-PHILOSOPHY.md",
             "README.md",
+            ".cursor/rules/agenticworkflow.mdc",
+            ".claude/skills/workflow-generator/SKILL.md",
+            ".claude/skills/workflow-generator/references/workflow-template.md",
+            ".claude/skills/workflow-generator/references/claude-code-patterns.md",
         ],
     },
     "CLAUDE.md": {
@@ -93,6 +97,22 @@ HUB_SPOKE_MAP: Dict[str, Dict] = {
     "AGENTICWORKFLOW-USER-MANUAL.md": {
         "role": "User manual",
         "sync_targets": ["AGENTS.md", "CLAUDE.md"],
+    },
+    ".cursor/rules/agenticworkflow.mdc": {
+        "role": "Spoke (Cursor IDE)",
+        "sync_targets": ["AGENTS.md"],
+    },
+    ".claude/skills/workflow-generator/SKILL.md": {
+        "role": "Skill definition (workflow-generator)",
+        "sync_targets": ["AGENTS.md"],
+    },
+    ".claude/skills/workflow-generator/references/workflow-template.md": {
+        "role": "Skill reference (workflow template)",
+        "sync_targets": ["AGENTS.md"],
+    },
+    ".claude/skills/workflow-generator/references/claude-code-patterns.md": {
+        "role": "Skill reference (Claude Code patterns)",
+        "sync_targets": ["AGENTS.md"],
     },
 }
 

@@ -28,7 +28,7 @@ workflow.md 파일의 표준 구조.
 
 1. **Quality Absolutism** — [이 워크플로우 도메인에서 품질이 의미하는 바를 구체화]
 2. **Single-File SOT** — `.claude/state.yaml`에 모든 공유 상태 집중
-3. **Code Change Protocol** — 구현 단계에서 코드 변경 시 의도→영향→설계 3단계 수행. 코딩 기준점(CAP-1~4) 내면화
+3. **Code Change Protocol** — Intent → Ripple Effect → Change Plan before any code change. Coding Anchor Points (CAP-1~4) internalized
 
 **Inherited Patterns**:
 

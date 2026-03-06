@@ -162,7 +162,7 @@ graph TD
 절대 기준 1(품질)이 "무엇을 최적화하는가"를, 절대 기준 2(SOT)가 "데이터를 어떻게 구조화하는가"를 정의한다면, 절대 기준 3은 **"코드를 변경할 때 어떻게 행동하는가"**를 정의한다. 품질 높은 코드는 의존성·결합도·변경 파급 효과를 사전에 분석하는 엄밀한 프로세스에서 나온다.
 
 > **상세 프로토콜**(전체 분석 항목, 적용 예시, 커뮤니케이션 규칙)은 **AGENTS.md §2 절대 기준 3**에 정의되어 있다.
-> CCP의 모든 단계는 **코딩 기준점(CAP-1~4)** — 코딩 전 사고, 단순성 우선, 목표 기반 실행, 외과적 변경 — 을 내면화한 상태에서 수행한다.
+> All CCP steps are performed with **Coding Anchor Points (CAP-1~4)** — Think before coding, Simplicity first, Goal-driven execution, Surgical changes — internalized.
 
 ### 2.4 우선순위 해결: 품질 > SOT, CCP
 

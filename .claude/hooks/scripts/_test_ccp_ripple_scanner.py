@@ -51,6 +51,25 @@ class TestHubSpokeMap(unittest.TestCase):
         self.assertIsNotNone(entry)
         self.assertIn("AGENTS.md", entry["sync_targets"])
 
+    def test_cursor_mdc_is_spoke(self):
+        """Cursor IDE rule file should be identified as Spoke."""
+        entry = scanner.HUB_SPOKE_MAP.get(".cursor/rules/agenticworkflow.mdc")
+        self.assertIsNotNone(entry)
+        self.assertIn("Spoke", entry["role"])
+        self.assertIn("AGENTS.md", entry["sync_targets"])
+
+    def test_agents_md_includes_cursor_spoke(self):
+        """AGENTS.md sync_targets should include Cursor IDE spoke."""
+        entry = scanner.HUB_SPOKE_MAP.get("AGENTS.md")
+        self.assertIn(".cursor/rules/agenticworkflow.mdc", entry["sync_targets"])
+
+    def test_agents_md_includes_skill_spokes(self):
+        """AGENTS.md sync_targets should include workflow-generator skill files."""
+        entry = scanner.HUB_SPOKE_MAP.get("AGENTS.md")
+        self.assertIn(".claude/skills/workflow-generator/SKILL.md", entry["sync_targets"])
+        self.assertIn(".claude/skills/workflow-generator/references/workflow-template.md", entry["sync_targets"])
+        self.assertIn(".claude/skills/workflow-generator/references/claude-code-patterns.md", entry["sync_targets"])
+
     def test_unknown_file_not_in_map(self):
         """Files not in the map should return None."""
         self.assertIsNone(scanner.HUB_SPOKE_MAP.get("random_file.py"))

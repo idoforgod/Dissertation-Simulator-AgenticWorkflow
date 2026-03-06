@@ -97,16 +97,16 @@ Good: Agent A → output-a.md 생성 → Orchestrator에 보고
 
 절대 기준 1(품질)이 "무엇을 최적화하는가"를 정의하고, 절대 기준 2(SOT)가 "데이터를 어떻게 구조화하는가"를 정의한다면, 절대 기준 3은 **"코드를 변경할 때 어떻게 행동하는가"**를 정의한다. 품질 높은 코드는 의존성·결합도·변경 파급 효과를 사전에 분석하는 엄밀한 프로세스에서 나온다.
 
-#### 코딩 기준점 (Coding Anchor Points, CAP-1~4)
+#### Coding Anchor Points (CAP-1~4)
 
-CCP가 "무엇을 수행하는가"(절차)를 정의한다면, CAP는 **"어떤 태도로 수행하는가"**(사고방식)를 정의한다. CCP의 모든 단계는 아래 4가지 기준점을 내면화한 상태에서 수행한다.
+CCP defines **what to do** (procedure); CAP defines **how to think** (mindset). All CCP steps are performed with these four anchor points internalized.
 
-- **CAP-1: 코딩 전 사고** — 가정하지 않는다. 코드를 읽기 전에 수정하지 않으며, 트레이드오프가 있으면 표면화하고, 불명확하면 질문한다.
-- **CAP-2: 단순성 우선** — 현재 요구를 충족하는 최소한의 코드만 작성한다. 추측성 기능, 조기 추상화, 불필요한 헬퍼를 만들지 않는다.
-- **CAP-3: 목표 기반 실행** — 구현 전에 성공 기준을 정의하고, 구현 후에 검증한다 (예: 테스트, 수동 확인).
-- **CAP-4: 외과적 변경** — 요청받은 변경만 수행한다. 관련 없는 코드를 "개선"하거나, 건드리지 않은 코드에 주석·타입·문서를 추가하지 않는다.
+- **CAP-1: Think before coding** — Don't assume. Never modify code before reading it. Surface tradeoffs explicitly. Ask when unclear.
+- **CAP-2: Simplicity first** — Write the minimum code that satisfies the current requirement. No speculative features, premature abstractions, or unnecessary helpers.
+- **CAP-3: Goal-driven execution** — Define success criteria before implementation. Verify after implementation (e.g., tests, manual confirmation).
+- **CAP-4: Surgical changes** — Touch only what was requested. Don't "improve" unrelated code. Don't add comments, type annotations, or documentation to code you didn't change.
 
-> CAP는 CCP의 하위 태도 규범이므로, 절대 기준 1(품질)과 충돌 시 품질이 이긴다. 예: CAP-2(단순성)가 품질을 저해하는 경우 — 품질을 위해 필요한 복잡성은 허용한다.
+> CAP is a sub-norm of CCP; when CAP conflicts with Absolute Standard 1 (Quality), quality wins. Example: if CAP-2 (simplicity) would compromise quality, the necessary complexity is permitted.
 
 **Step 1 — 의도 파악:**
 - 사용자가 지시한 구현사항을 정확하게 파악했는가? 1-2문장으로 명확하게 설명할 수 있어야 한다.

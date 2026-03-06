@@ -33,7 +33,7 @@
 > 코드를 작성·수정·추가·삭제하기 전에 반드시 3단계를 수행한다:
 > Step 1 의도 파악 → Step 2 영향 범위 분석 → Step 3 변경 설계.
 > 분석 깊이는 변경 규모에 비례한다 (경미: Step 1만, 표준: 전체, 대규모: 전체 + 사용자 승인).
-> **코딩 기준점(CAP-1~4)**: 코딩 전 사고, 단순성 우선, 목표 기반 실행, 외과적 변경. 상세: AGENTS.md §2.
+> **Coding Anchor Points (CAP-1~4)**: Think before coding, Simplicity first, Goal-driven execution, Surgical changes. Details: AGENTS.md §2.
 
 > **상세 내용**: AGENTS.md §2 참조.
 

@@ -643,8 +643,10 @@
   - soul.md 게놈 테이블에 행 추가 → 기각 (12→13 cascade, 6+ 파일 연쇄 변경)
   - reviewer.md에 6번째 렌즈 추가 → 기각 (@reviewer는 산출물 검토, CAP-1/CAP-3은 프로세스 태도로 산출물에서 관찰 불가)
   - P1 Python 강제 (행동 검증) → 기각 (태도 ≠ 구조, 의미론적 판단은 결정론적 코드로 검증 불가, false positive 양산)
-- **후속 수정**: Critical Reflection에서 Category Error 식별 — CAP **행동** 강제(의미론적, P1 불가)와 CAP **문서 전파** 검증(구조적, P1 가능)은 다른 문제. 생성된 workflow.md에 CAP 참조가 구조적으로 존재하는지는 결정론적으로 검증 가능하므로, ADR-039의 `validate_workflow_md()`에 W6(Coding Anchor Points 참조 존재) 검증을 추가. 이는 ADR-041의 "행동 P1 기각"과 모순하지 않음 — W6는 문서 전파의 P1이지 행동의 P1이 아님.
-- **관련 ADR**: ADR-005 (CCP), ADR-038 (DNA Inheritance), ADR-039 (W6 추가)
+- **후속 수정 1**: Critical Reflection에서 Category Error 식별 — CAP **행동** 강제(의미론적, P1 불가)와 CAP **문서 전파** 검증(구조적, P1 가능)은 다른 문제. 생성된 workflow.md에 CAP 참조가 구조적으로 존재하는지는 결정론적으로 검증 가능하므로, ADR-039의 `validate_workflow_md()`에 W6(Coding Anchor Points 참조 존재) 검증을 추가. 이는 ADR-041의 "행동 P1 기각"과 모순하지 않음 — W6는 문서 전파의 P1이지 행동의 P1이 아님.
+- **후속 수정 2** (2026-03-06): CAP 정의 전체를 한국어→영어 원문으로 전환 (ADR-027a English-First MANDATORY 정합). Hub(AGENTS.md) + Detail(code-change-protocol.md) + Spoke 6개 + DNA 템플릿 3개 = 11개 파일 동기화. P1 Hook 추가(scanner CAP 리마인더)는 4차 Critical Reflection에서 기각 — CLAUDE.md가 매 턴 로드되어 이미 CAP을 제공하므로 중복 정보 주입이며, scanner의 SRP(의존성 발견)를 위반하고, CAP-2(simplicity)에 반함. 영어 전환 자체가 enforcement 향상(Claude의 영어 지시 이해도 > 한국어).
+- **후속 수정 3** (2026-03-06): Post-implementation reflection에서 `.cursor/rules/agenticworkflow.mdc` 누락 발견 — `ccp_ripple_scanner.py`의 `HUB_SPOKE_MAP`에 미등록이 근본 원인. 맵에 4개 Spoke 추가: `.cursor/rules/agenticworkflow.mdc`, `.claude/skills/workflow-generator/SKILL.md`, `references/workflow-template.md`, `references/claude-code-patterns.md`. 역방향 엔트리도 추가. 테스트 3개 추가 (35개 전체 통과). 향후 AGENTS.md 수정 시 P1 수준에서 동기화 누락 원천봉쇄.
+- **관련 ADR**: ADR-005 (CCP), ADR-027a (English-First), ADR-038 (DNA Inheritance), ADR-039 (W6 추가), ADR-042 (Hub-Spoke 맵)
 
 ### ADR-042: Hook 설정 Global → Project 통합
 

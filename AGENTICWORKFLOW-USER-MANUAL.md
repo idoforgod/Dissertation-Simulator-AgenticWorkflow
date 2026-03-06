@@ -98,7 +98,7 @@ Claude Code가 실행되면 `CLAUDE.md`를 자동으로 읽고, 프로젝트의 
 
 분석 깊이는 변경의 영향 범위에 비례합니다 (경미 → Step 1만 / 표준 → 전체 / 대규모 → 전체 + 사전 승인).
 
-> **코딩 기준점(CAP-1~4)**: 코딩 전 사고, 단순성 우선, 목표 기반 실행, 외과적 변경. 상세: AGENTS.md §2 절대 기준 3.
+> **Coding Anchor Points (CAP-1~4)**: Think before coding, Simplicity first, Goal-driven execution, Surgical changes. Details: AGENTS.md §2.
 
 ### 절대 기준 간 우선순위
 

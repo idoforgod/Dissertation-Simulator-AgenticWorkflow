@@ -293,7 +293,7 @@ Orchestrator (품질 조율 및 전체 흐름 관리)
 
 1. 케이스 판별 (문서 유무)
 2. Case 1: 대화로 요구사항 수집 / Case 2: 문서 분석 → 확인 대화
-3. **Genome Inheritance**: `Inherited DNA (Parent Genome)` 섹션을 workflow.md에 포함 (유전 프로토콜 — `references/workflow-template.md` 참조). `parent_genome.version`은 워크플로우 생성 시점의 날짜(YYYY-MM-DD)를 사용한다. CCP 맥락화 시 코딩 기준점(CAP-1~4)을 포함한다.
+3. **Genome Inheritance**: `Inherited DNA (Parent Genome)` 섹션을 workflow.md에 포함 (유전 프로토콜 — `references/workflow-template.md` 참조). `parent_genome.version`은 워크플로우 생성 시점의 날짜(YYYY-MM-DD)를 사용한다. CCP contextualization must include Coding Anchor Points (CAP-1~4).
 4. 설계 원칙 P1~P4 적용하며 3단계 구조로 작업 정의
    - 도메인 지식 구조(DKS) 필요성을 평가한다: 의학·법률·경쟁 분석 등 도메인 특화 추론이 필요한 워크플로우는 Research 단계에 DKS 구축 단계를 포함한다. DKS를 사용하는 워크플로우는 관련 단계의 Post-processing에 `python3 .claude/hooks/scripts/validate_domain_knowledge.py --project-dir . --check-output --step N`을 포함한다. 상세: `AGENTS.md §5.3 DKS`
 5. 각 단계에 데이터 전처리/후처리 명시 (P1)

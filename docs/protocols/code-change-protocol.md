@@ -40,13 +40,13 @@
 - 중요한 설계 선택에는 간단한 이유를 덧붙인다.
 - 모호한 부분이 있어도 작업을 회피하지 말고, "합리적인 가정"을 명시한 뒤 최선의 설계를 제안한다.
 
-## 코딩 기준점 (CAP)
+## Coding Anchor Points (CAP)
 
-CCP의 모든 단계는 아래 4가지 태도를 내면화한 상태에서 수행한다:
+All CCP steps are performed with these four mindset anchors internalized:
 
-- **CAP-1**: 코딩 전 사고 — 코드를 읽기 전에 수정 금지. 트레이드오프 표면화. 불명확하면 질문
-- **CAP-2**: 단순성 우선 — 최소 코드. 추측성 기능·조기 추상화·불필요 헬퍼 금지
-- **CAP-3**: 목표 기반 실행 — 성공 기준 먼저 정의, 구현 후 검증
-- **CAP-4**: 외과적 변경 — 요청받은 변경만. 관련 없는 "개선" 금지
+- **CAP-1**: Think before coding — Never modify before reading. Surface tradeoffs. Ask when unclear.
+- **CAP-2**: Simplicity first — Minimum code. No speculative features, premature abstractions, or unnecessary helpers.
+- **CAP-3**: Goal-driven execution — Define success criteria first, verify after implementation.
+- **CAP-4**: Surgical changes — Touch only what was requested. No unrelated "improvements."
 
-> CAP는 CCP 하위이므로, 절대 기준 1(품질)과 충돌 시 품질이 이긴다. 상세: AGENTS.md §2 절대 기준 3.
+> CAP is subordinate to CCP; when conflicting with Absolute Standard 1 (Quality), quality wins. Details: AGENTS.md §2.
