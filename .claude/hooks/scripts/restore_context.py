@@ -1093,6 +1093,120 @@ def _surface_pccs_state(project_dir: str) -> list[str]:
     return lines
 
 
+def _surface_hypothesis_graveyard(project_dir: str) -> list[str]:
+    """CM-OPT-2: Surface rejected hypotheses as IMMORTAL section.
+
+    Extracts recent rejected hypotheses from knowledge-index.jsonl and
+    surfaces them at SessionStart so the Orchestrator avoids re-trying
+    failed approaches after context reset.
+
+    IMMORTAL: This section survives compression — prevents circular exploration.
+    P1 Compliance: deterministic extraction from structured JSON data.
+    Non-blocking: returns empty list on any error.
+    """
+    try:
+        snapshot_dir = get_snapshot_dir(project_dir)
+        ki_path = os.path.join(snapshot_dir, "knowledge-index.jsonl")
+        if not os.path.exists(ki_path):
+            return []
+
+        # Read recent 30 sessions (enough for hypothesis coverage)
+        all_sessions: list[dict] = []
+        with open(ki_path, "r", encoding="utf-8") as f:
+            for line_text in f:
+                line_text = line_text.strip()
+                if line_text:
+                    try:
+                        all_sessions.append(json.loads(line_text))
+                    except json.JSONDecodeError:
+                        continue
+
+        if not all_sessions:
+            return []
+
+        # Extract from most recent 30 sessions
+        recent = all_sessions[-30:]
+        hypotheses: list[str] = []
+        for session in reversed(recent):
+            rejected = session.get("rejected_hypotheses", [])
+            if not isinstance(rejected, list):
+                continue
+            for rh in rejected:
+                if not isinstance(rh, dict):
+                    continue
+                text = rh.get("text", "?")
+                outcome = rh.get("outcome", "failed")
+                hypotheses.append(f"  - {text} → {outcome}")
+            if len(hypotheses) >= 5:
+                break
+
+        if not hypotheses:
+            return []
+
+        lines: list[str] = []
+        lines.append("■ HYPOTHESIS GRAVEYARD (IMMORTAL — 반복 탐색 방지):")
+        lines.extend(hypotheses[:5])
+        lines.append("  ⚠ 위 접근법은 이전 세션에서 시도되어 실패함. 동일 접근 재시도 금지.")
+        return lines
+    except Exception:
+        return []
+
+
+def _surface_self_improvement_state(project_dir: str) -> list[str]:
+    """Surface KBSI (Knowledge-Based Self-Improvement) state for SessionStart.
+
+    Reads self-improvement-logs/state.json to surface a 2-3 line summary of
+    the current self-improvement system state. Non-IMMORTAL — informational
+    only (AGENTS.md §11 rules are always in system prompt anyway).
+
+    P1 Compliance: JSON read + dict formatting — deterministic.
+    SOT Compliance: Read-only.
+    Returns: list of lines (empty if no KBSI state).
+    """
+    si_dir = os.path.join(project_dir, "self-improvement-logs")
+    sot_path = os.path.join(si_dir, "state.json")
+
+    if not os.path.exists(sot_path):
+        return []
+
+    try:
+        with open(sot_path, "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+    insights = state.get("insights", {})
+    if not insights and not state.get("queued_changes"):
+        return []
+
+    lines: list[str] = []
+
+    applied = sum(1 for v in insights.values() if v.get("status") == "applied")
+    pending = sum(1 for v in insights.values() if v.get("status") == "pending")
+    rejected = sum(1 for v in insights.values() if v.get("status") == "rejected")
+
+    lines.append(f"■ KBSI STATE: {applied} applied, {pending} pending, {rejected} rejected")
+
+    # Surface pending insights that need attention
+    if pending > 0:
+        pending_ids = [
+            k for k, v in insights.items() if v.get("status") == "pending"
+        ][:3]
+        lines.append(f"  Pending review: {', '.join(pending_ids)}")
+
+    # Surface queued changes
+    queued = state.get("queued_changes", [])
+    queued_pending = [q for q in queued if not q.get("applied")]
+    if queued_pending:
+        structural = sum(1 for q in queued_pending if q.get("change_type") == "STRUCTURAL")
+        lines.append(
+            f"  Queued changes: {len(queued_pending)} "
+            f"({structural} STRUCTURAL — need user approval)"
+        )
+
+    return lines
+
+
 def _extract_thesis_gate_hitl_state(project_dir: str) -> list[str]:
     """CM-4: Extract Gate pass/fail and HITL decision history for IMMORTAL surface.
 
@@ -1513,6 +1627,22 @@ def _build_recovery_output(source, latest_path, summary, sot_warning, snapshot_a
         for pl in pccs_lines:
             output_lines.append(pl)
 
+    # CM-OPT-2: Hypothesis Graveyard (IMMORTAL — prevents circular exploration)
+    # Surfaces recent rejected hypotheses so Orchestrator avoids re-trying
+    # failed approaches after context reset. Extracted from knowledge-index.
+    hyp_lines = _surface_hypothesis_graveyard(project_dir) if project_dir else []
+    if hyp_lines:
+        output_lines.append("")
+        for hl in hyp_lines:
+            output_lines.append(hl)
+
+    # KBSI State (non-IMMORTAL — informational, rules always in AGENTS.md)
+    kbsi_lines = _surface_self_improvement_state(project_dir) if project_dir else []
+    if kbsi_lines:
+        output_lines.append("")
+        for kl in kbsi_lines:
+            output_lines.append(kl)
+
     # Phase 1-A: Thesis continuity markers (pending gates + blocked steps)
     thesis_continuity = _extract_thesis_continuity(project_dir)
     if thesis_continuity:
@@ -1920,15 +2050,16 @@ def _retrieve_relevant_sessions(ki_path, task_info, file_paths, max_results=3,
                     pass
 
             # 7. Error resolution rate — sessions with resolved errors boost
-            # relevant when current session also has errors (same problem domain)
-            if error_info_for_scoring:
-                past_errors = session.get("error_patterns", [])
-                if isinstance(past_errors, list) and past_errors:
-                    resolved = sum(1 for e in past_errors if isinstance(e, dict) and e.get("resolution"))
-                    total = len(past_errors)
-                    if total > 0 and resolved > 0:
-                        resolution_rate = resolved / total
-                        score += min(resolution_rate * 2.0, 2.0)  # Up to +2.0
+            # CM-OPT-1: Always score (not conditional on current-session errors).
+            # Past error solutions are valuable preemptively — surface them BEFORE
+            # the current session hits the same error, not only after.
+            past_err_for_res = session.get("error_patterns", [])
+            if isinstance(past_err_for_res, list) and past_err_for_res:
+                resolved = sum(1 for e in past_err_for_res if isinstance(e, dict) and e.get("resolution"))
+                total = len(past_err_for_res)
+                if total > 0 and resolved > 0:
+                    resolution_rate = resolved / total
+                    score += min(resolution_rate * 2.0, 2.0)  # Up to +2.0
 
             if score > 0:
                 scored.append((score, session))

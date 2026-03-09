@@ -141,6 +141,13 @@ D7_SYNC_PAIRS: Dict[str, List[str]] = {
         "CLAUDE.md",
         "AGENTICWORKFLOW-ARCHITECTURE-AND-PHILOSOPHY.md",
     ],
+    # KBSI — IMMUTABLE_KEYWORDS + markers duplicated between manager and validator (D-7 design)
+    ".claude/hooks/scripts/self_improve_manager.py": [
+        ".claude/hooks/scripts/validate_self_improvement.py",
+    ],
+    ".claude/hooks/scripts/validate_self_improvement.py": [
+        ".claude/hooks/scripts/self_improve_manager.py",
+    ],
     # Predictive Debugging pipeline — shared JSON format contracts
     ".claude/hooks/scripts/scan_code_structure.py": [
         ".claude/hooks/scripts/validate_failure_predictions.py",  # consumes fp-code-map.json

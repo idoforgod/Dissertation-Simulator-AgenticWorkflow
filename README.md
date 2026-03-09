@@ -1,10 +1,10 @@
 # Dissertation Simulator
 
-**AI 에이전트 53개가 협업하는 210-step 박사 논문 연구 시뮬레이션 시스템.**
+**AI 에이전트 58개가 협업하는 210-step 박사 논문 연구 시뮬레이션 시스템.**
 
 주제 탐색에서 학술지 투고까지, 박사 논문 연구의 전 과정을 AI 에이전트가 지원합니다.
 문헌 검토(5 Wave) → 연구 설계(양적/질적/혼합) → 논문 집필 → 출판 전략의 4단계로 구성되며,
-5개 Cross-Validation Gate와 9개 HITL(Human-In-The-Loop) 체크포인트가 학술적 엄밀성을 보장합니다.
+5계층 품질 보장(L0→L1→L1.5→L1.7→L2), 5개 Cross-Validation Gate, 9개 HITL(Human-In-The-Loop) 체크포인트가 학술적 엄밀성을 보장합니다.
 
 > 이 시스템은 [AgenticWorkflow](AGENTICWORKFLOW-ARCHITECTURE-AND-PHILOSOPHY.md) — 만능줄기세포 프레임워크에서 태어난 자식 시스템입니다.
 > 부모의 전체 DNA(절대 기준, 품질 보장, 안전장치, 기억 체계)를 상속하면서, 박사 논문 도메인에 특화된 아키텍처를 갖습니다.
@@ -51,15 +51,20 @@ Translation: 한국어 번역             (Step 181-210)
 
 | 특징 | 설명 |
 |------|------|
-| **53개 전문 에이전트** | 문헌 검색·분석·연구 설계·작성·출판 각 과정에 전문화된 AI 에이전트 (기반 5 + 논문 48) |
-| **GRA 3계층 품질 보장** | Agent Self-Verification → Cross-Validation Gate → SRCS 통합 평가 |
+| **58개 전문 에이전트** | 문헌 검색·분석·연구 설계·작성·출판 각 과정에 전문화된 AI 에이전트 (기반 11 + 논문 46 + 통합 1) |
+| **5계층 품질 보장** | L0(Anti-Skip) → L1(Verification) → L1.5(pACS) → L1.7(pCCS per-claim) → L2(Adversarial Review) |
 | **9개 HITL 체크포인트** | 연구 방향·방법론·최종 산출물에 대한 인간 연구자의 승인 |
 | **7가지 Input Mode** | 주제(A), 연구질문(B), 기존문헌(C), 학습(D), 선행논문(E), 제안서(F), 커스텀(G) |
-| **GroundedClaim 스키마** | 47개 고유 prefix, 6가지 claim 유형, Hallucination Firewall |
+| **GroundedClaim 스키마** | 15개 GRA domain prefix + 20개 utility prefix, 7가지 canonical claim 유형, Hallucination Firewall |
+| **pCCS per-claim 신뢰도** | P1 Sandwich 아키텍처 — claim별 예측 신뢰도 점수. rewrite/proceed 자동 결정 |
+| **Predictive Debugging** | 코드 구조 스캔 → 실패 예측 → 적대적 검증 → 사전 조치 |
+| **Step Execution Registry** | `query_step.py` — 210-step 결정론적 agent/tier/critic/pCCS 매핑. Orchestrator 할루시네이션 원천봉쇄 |
+| **Adversarial Dialogue** | @fact-checker + @reviewer 병렬 적대적 리뷰. Generator-Critic 반복 루프 |
 | **3-tier Fallback** | Team → Sub-agent → Direct 실행으로 복원력 보장 |
-| **Context Reset Model** | 4개 HITL 지점에서 안전한 컨텍스트 리셋 + 3-File Memory로 복원 |
-| **29개 Slash Commands** | `/thesis-init`, `/thesis-start`, `/thesis-status` 등 전체 워크플로우 제어 |
+| **Context Reset Model** | 4개 HITL 지점에서 안전한 컨텍스트 리셋 + 3-File Memory + IMMORTAL 섹션으로 복원 |
+| **31개 Slash Commands** | `/thesis-init`, `/thesis-start`, `/self-improve`, `/predict-failures` 등 전체 워크플로우 제어 |
 | **3-Layer 번역 품질** | Layer 0 (자기 검토) → Layer 1a/1b (Python T1-T12) → Layer 2 (@translation-verifier 의미론적 검증) |
+| **KBSI 자기 개선** | 에러 분석 → 개선안 추출 → AGENTS.md 영구 반영. 시스템이 스스로 학습 |
 
 ## 프로젝트 구조
 
@@ -85,14 +90,15 @@ Dissertation-Simulator-AgenticWorkflow/
 │  ── 논문 워크플로우 인프라 ──
 ├── .claude/
 │   ├── settings.json         # Hook 설정
-│   ├── agents/               # 53개 에이전트 (기반 5 + 논문 48)
-│   │   ├── thesis-orchestrator.md    (총괄 조율)
-│   │   ├── literature-searcher.md    (문헌 검색)
-│   │   ├── translation-verifier.md   (번역 품질 검증, Layer 2)
-│   │   ├── synthesis-agent.md        (통합 합성)
-│   │   └── ... (48개 논문 전문 에이전트)
-│   ├── commands/              # 29개 Slash Commands (시스템 2 + 라우터 1 + 논문 26)
-│   ├── hooks/scripts/         # 66개 스크립트 (프로덕션 42 + 모듈 2 + 테스트 22)
+│   ├── agents/               # 58개 에이전트 (기반 11 + 논문 46 + 통합 1)
+│   │   ├── thesis-orchestrator.md    (총괄 조율 — 150 maxTurns)
+│   │   ├── fact-checker.md           (사실 검증, claim-by-claim)
+│   │   ├── reviewer.md              (적대적 리뷰어, Enhanced L2)
+│   │   ├── claim-quality-evaluator.md (pCCS Phase B-1, sonnet)
+│   │   ├── failure-predictor.md      (Predictive Debugging Phase B-1)
+│   │   └── ... (46개 논문 전문 에이전트 + 6개 기반 에이전트)
+│   ├── commands/              # 31개 Slash Commands (시스템 4 + 라우터 1 + 논문 26)
+│   ├── hooks/scripts/         # 107개 스크립트 (프로덕션 63 + 모듈 2 + 테스트 42)
 │   │   ├── checklist_manager.py      (논문 SOT 관리)
 │   │   ├── query_workflow.py         (워크플로우 관측성)
 │   │   ├── validate_grounded_claim.py (claim 검증)
@@ -116,24 +122,40 @@ Dissertation-Simulator-AgenticWorkflow/
         └── checkpoints/       # 체크포인트
 ```
 
-## 품질 보장 체계 (GRA)
+## 품질 보장 체계
 
-Grounded Research Architecture — 3계층 품질 보장:
+5계층 품질 보장 + P1 Sandwich 아키텍처:
 
 ```
-Layer 1: Agent Self-Verification
-  └── GroundedClaim 스키마 (id, text, sources[], confidence, verification)
-  └── Hallucination Firewall ("all studies agree" 등 차단)
-  └── Claim 유형별 최소 confidence (FACTUAL:95, EMPIRICAL:85, THEORETICAL:75)
+L0: Anti-Skip Guard
+  └── 파일 존재 + 비어있지 않음 + 최소 크기 확인
 
-Layer 2: Cross-Validation Gates (5개)
+L1: Verification Gate (Python P1 — 결정론적)
+  └── GroundedClaim 스키마 검증 (id, text, sources[], confidence, uncertainty)
+  └── Hallucination Firewall ("all studies agree" 등 차단)
+  └── VE1-VE5 교차 증거 검증 (validate_criteria_evidence.py)
+
+L1.5: pACS (predicted Agent Confidence Score)
+  └── F/C/L 3차원 자기 평가 — 최저점 원칙 (min-score)
+
+L1.7: pCCS (predicted Claim Confidence Score) ← NEW
+  └── P1 Sandwich: compute_pccs_signals.py → @claim-quality-evaluator →
+      validate_pccs_assessment.py → @claim-quality-critic → generate_pccs_report.py
+  └── Claim별 예측 신뢰도 점수 → proceed / rewrite_claims / rewrite_step 결정
+  └── Claim 유형별 적응 가중치 (FACTUAL:0.50/0.50 → SPECULATIVE:0.15/0.85)
+
+L2: Adversarial Review (Enhanced)
+  └── Research domain: @fact-checker + @reviewer 병렬 적대적 검증
+  └── Development domain: @code-reviewer 단독 검증
+  └── Review FAIL → Adversarial Dialogue (Generator-Critic 반복 루프)
+
+Cross-Validation Gates (5개)
   └── Gate 1-4: Wave 간 claim 품질 교차 검증
   └── Gate 5: 연구 설계 최종 검증
 
-Layer 3: SRCS Unified Evaluation
+SRCS Unified Evaluation
   └── 4축: Source · Rigor · Confidence · Specificity
-  └── Claim 유형별 차등 가중치 (EMPIRICAL vs THEORETICAL vs FACTUAL)
-  └── 75점 임계값 — 미달 claim 플래그
+  └── Claim 유형별 차등 가중치 · 75점 임계값
 ```
 
 ## 부모-자식 문서 분리 패턴
@@ -151,7 +173,7 @@ Layer 3: SRCS Unified Evaluation
 | 1 | **README.md** (이 파일) | 프로젝트 개요와 빠른 시작 |
 | 2 | [`DISSERTATION-SIMULATOR-USER-MANUAL.md`](DISSERTATION-SIMULATOR-USER-MANUAL.md) | 논문 워크플로우 사용법 |
 | 3 | [`DISSERTATION-SIMULATOR-ARCHITECTURE-AND-PHILOSOPHY.md`](DISSERTATION-SIMULATOR-ARCHITECTURE-AND-PHILOSOPHY.md) | 도메인 고유 아키텍처와 설계 철학 |
-| 4 | [`DECISION-LOG.md`](DECISION-LOG.md) | 설계 결정의 맥락과 근거 |
+| 4 | [`DECISION-LOG.md`](DECISION-LOG.md) | 설계 결정의 맥락과 근거 (ADR-001~070+) |
 | - | [`AGENTICWORKFLOW-ARCHITECTURE-AND-PHILOSOPHY.md`](AGENTICWORKFLOW-ARCHITECTURE-AND-PHILOSOPHY.md) | (참고) 부모 프레임워크 설계 철학 |
 | - | [`AGENTICWORKFLOW-USER-MANUAL.md`](AGENTICWORKFLOW-USER-MANUAL.md) | (참고) 부모 프레임워크 사용법 |
 | - | [`soul.md`](soul.md) | (참고) DNA 유전 철학 |

@@ -645,3 +645,24 @@ If context is lost (compact/clear):
 2. Read todo-checklist.md for step details
 3. Read research-synthesis.md for accumulated insights
 4. Resume from current_step in SOT
+
+## Post-Mortem Self-Improvement (KBSI)
+
+Triggers for self-improvement analysis:
+1. **After error resolution**: When an error is discovered and fixed during workflow execution
+2. **At Phase Gate passage**: After each Cross-Validation Gate (4 times per run)
+3. **At workflow end**: Final comprehensive analysis
+
+**Protocol** (event-driven, NOT per-step):
+
+When triggered, invoke `/self-improve` command logic:
+1. Check KBSI status: `self_improve_manager.py --status --si-dir self-improvement-logs`
+2. Analyze recent errors/patterns from knowledge-index.jsonl
+3. For each insight candidate, validate 4 quality criteria (Recurrence, Generalizability, Actionability, Non-redundancy)
+4. Register via `self_improve_manager.py --register` (P1 auto-classifies SAFE/STRUCTURAL)
+5. Validate via `validate_self_improvement.py --validate-all`
+6. SAFE insights: apply with user awareness. STRUCTURAL insights: **require explicit user approval**
+7. Apply to AGENTS.md §11: `self_improve_manager.py --apply-to-agents-md`
+8. Sync CLAUDE.md: `self_improve_manager.py --sync-claude-md`
+
+**Safety**: LLM never directly edits AGENTS.md or CLAUDE.md for self-improvement. All writes are P1 marker-based.

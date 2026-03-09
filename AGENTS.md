@@ -237,7 +237,7 @@ Task(subagent_type="translator", prompt="...", ...)
 Team Lead(=Orchestrator)
   1. TeamCreate → SOT active_team 기록
   2. TaskCreate (subject, description, owner=@teammate)
-     → Note: blocks/blockedBy 의존성 선언은 설계 예정 (현재 미구현 — Tier 2 기본 사용으로 영향 없음)
+     → Note: blocks/blockedBy 의존성 선언은 미구현 (EXPERIMENTAL). Tier 1 Agent Team은 실험적 기능이며, 기본값은 Tier 2 (순차 sub-agent 실행). Tier 1은 session-scoped TaskCreate ID 제약으로 context reset 시 복구 불가.
   3. Task(subagent_type, team_name, ...) → Teammate 생성
   4. Teammate: 작업 수행 → L1 자기 검증 → L1.5 pACS 자기 채점
   5. Teammate: TaskUpdate(completed) → SendMessage(보고 + pACS 점수)
@@ -1444,7 +1444,7 @@ AGENTS.md의 절대 기준이 변경되면, 모든 Spoke 파일의 인라인 복
 - **Phase 1** (Step 105-140): Research Design — 1 Gate, HITL-3/4
 - **Phase 2** (Step 141-210): Writing & Publication — HITL-5~8
 - **48개 전문 에이전트**: 문헌 검색·분석·연구 설계·작성·출판
-- **논문 SOT**: `session.json` (시스템 SOT `state.yaml`과 독립)
+- **논문 SOT**: `session.json` (이 프로젝트의 유일한 활성 SOT. `state.yaml`은 workflow-generator가 생성하는 자식 시스템의 런타임 SOT이며, 부모 repo에는 존재하지 않음)
 
 ### 10.2 GroundedClaim 스키마
 
@@ -1499,3 +1499,44 @@ AGENTS.md의 절대 기준이 변경되면, 모든 Spoke 파일의 인라인 복
 3. **Cross-Component**: checklist_manager ↔ query_workflow ↔ generate_context_summary
 4. **CLI Flags**: 모든 argparse 플래그 성공/에러 시나리오
 5. **Error Recovery**: 손상 SOT, 누락 파일, 의존성 적용, 체크포인트 복구
+
+---
+
+## §11. Knowledge-Based Self-Improvement (KBSI)
+
+워크플로우 실행 과정에서 발견된 오류·개선 사항을 일반화하여 영구 저장하는 자기 개선 시스템.
+
+### 11.1 KBSI 프로토콜
+
+| Track | 트리거 | 동작 |
+|-------|--------|------|
+| Track 1 (Reactive) | 오류 발견 → 원인 분석 → 해결 | Insight 추출 → 일반화 → §11.4에 영구 저장 |
+| Track 2 (Proactive) | 개선 기회 발견 | 컴포넌트 업데이트 → end-of-run 적용 (Hook .py) 또는 즉시 적용 (Agent .md) |
+
+**P1 Sandwich**: `validate_self_improvement.py` (SI-1~SI-6) → LLM 분석 → `self_improve_manager.py` (적용)
+
+### 11.2 Safety Boundaries
+
+**STRUCTURAL 자동 분류 (P1 결정론적)**:
+- Immutable keyword 탐지: absolute standard, P1 sandwich, SOT single-writer, 5-layer quality, safety hook exit 2, DNA inheritance, hub-spoke, RLM pattern, 3-stage workflow
+- Hub file 참조 탐지: AGENTS.md, CLAUDE.md, soul.md, _context_lib.py
+- STRUCTURAL insight는 반드시 사용자 승인 필수
+
+**Insight 품질 기준**: Recurrence(반복성) + Generalizability(일반화 가능성) + Actionability(실행 가능성) + Non-redundancy(비중복성) — 4가지 모두 충족 시에만 §11.4 승격
+
+### 11.3 SOT
+
+`self-improvement-logs/state.json` — KBSI 전용 SOT (thesis SOT, system SOT와 독립)
+
+| 필드 | 설명 |
+|------|------|
+| `insights` | 모든 insight (pending/applied/rejected) |
+| `total_applied` / `total_rejected` | 누적 카운터 |
+| `queued_changes` | Track 2 대기 변경 사항 |
+
+CLI: `self_improve_manager.py --register|--apply|--reject|--status|--compute-effectiveness|--apply-to-agents-md|--sync-claude-md|--queue-change`
+
+### 11.4 Accumulated Insights
+
+<!-- SELF-IMPROVEMENT-START -->
+<!-- SELF-IMPROVEMENT-END -->

@@ -1018,6 +1018,61 @@
 - **파급 효과**: claude-code-patterns.md, workflow-template.md, AGENTS.md, guard_sot_write.py, save_context.py, CLAUDE.md, AGENTICWORKFLOW-USER-MANUAL.md, AGENTICWORKFLOW-ARCHITECTURE-AND-PHILOSOPHY.md
 - **관련 ADR**: ADR-021 (Agent Team 2계층 SOT), ADR-006 (단일 파일 SOT), ADR-060 (Context Memory 품질 최적화)
 
+### ADR-063: pCCS v3 — per-claim Confidence Score + P1 Sandwich
+
+- **날짜**: 2026-03-08
+- **상태**: Accepted
+- **맥락**: 기존 품질 체계(L0→L1→L1.5→L2)는 에이전트 단위 평가(pACS)만 수행하여, 개별 claim 수준의 신뢰도를 측정할 수 없었다. 학술 논문에서는 단일 에이전트 출력 안에서도 claim별 품질 편차가 크다.
+- **결정**: L1.7 계층으로 pCCS (predicted Claim Confidence Score)를 삽입. P1 Sandwich 아키텍처 — `compute_pccs_signals.py`(Phase A) → `@claim-quality-evaluator`(Phase B-1) → `validate_pccs_assessment.py`(Phase C) → `@claim-quality-critic`(Phase B-2) → `generate_pccs_report.py`(Phase D). Claim 유형별 적응 가중치 (FACTUAL:0.50/0.50 → SPECULATIVE:0.15/0.85). 결정 매트릭스: proceed / rewrite_claims / rewrite_step.
+- **근거**: 절대 기준 1(품질) — claim 단위 품질 측정이 에이전트 단위보다 정밀. P1 Sandwich로 LLM 할루시네이션 봉쇄.
+- **대안**: pACS를 claim 단위로 확장 → 기각 (자기 평가의 한계, 독립 검증 필요). 전체 LLM 기반 → 기각 (결정론적 검증 부재).
+- **파급 효과**: 7개 P1 스크립트 + 2개 sub-agent + SOT schema 확장 + restore_context.py IMMORTAL 섹션
+- **관련 ADR**: ADR-024 (P1 봉쇄), ADR-054 (GroundedClaim Schema)
+
+### ADR-064: Step Execution Registry — query_step.py 결정론적 라우팅
+
+- **날짜**: 2026-03-09
+- **상태**: Accepted
+- **맥락**: Orchestrator가 210개 step의 실행 파라미터(agent, tier, critic, pCCS mode)를 prose 문서에서 해석하여 결정하면, 할루시네이션으로 잘못된 에이전트를 호출하거나 품질 검증을 누락할 위험이 있었다 (H-1~H-4 취약점).
+- **결정**: `query_step.py` P1 스크립트 — 210-step을 결정론적으로 agent/tier/critic/pCCS 매핑. Orchestrator는 "DO NOT interpret prose rules, use query_step.py --json output" 강제. CLI: `--step N --json`, `--list-agents`, `--list-steps --agent NAME`.
+- **근거**: 절대 기준 1(품질) — Orchestrator 할루시네이션이 전체 워크플로우 품질을 오염시킴. P1 결정론적 라우팅으로 원천봉쇄.
+- **대안**: Orchestrator 프롬프트 강화 → 기각 (확률적 해석은 본질적으로 불안정). 하드코딩 JSON 매핑 → 기각 (research_type별 분기 등 로직 필요).
+- **파급 효과**: `query_step.py`, `thesis-orchestrator.md` E1/E5 강화, `checklist_manager.py` advance guards (H-5/H-6)
+- **관련 ADR**: ADR-052 (Doctoral Thesis Workflow), ADR-063 (pCCS v3)
+
+### ADR-065: Predictive Debugging — 사전 실패 예측 시스템
+
+- **날짜**: 2026-03-08
+- **상태**: Accepted
+- **맥락**: 프로덕션 코드가 63개 스크립트로 성장하면서, 코드 구조적 취약점(복잡도, 에러 처리 누락, 의존성 집중)이 잠재적 실패를 야기할 수 있었다. 사후 디버깅보다 사전 예측이 효율적이다.
+- **결정**: P1 Sandwich — `scan_code_structure.py`(Phase A, F1-F7 코드 스캔) → `@failure-predictor`(Phase B-1) → `extract_json_block.py`(핸드오프) → `validate_failure_predictions.py`(Phase C, FP1-FP7) → `@failure-critic`(Phase B-2) → `generate_failure_report.py`(Phase D). SOT: `failure-predictions/index.jsonl`.
+- **근거**: 절대 기준 1(품질) — 실패를 예측하고 사전 조치하는 것이 사후 수정보다 품질 우위.
+- **대안**: 정적 분석 도구(pylint/flake8)만 사용 → 기각 (구조적 패턴 분석 불가, 도메인 맥락 부재).
+- **파급 효과**: 4개 P1 스크립트 + 2개 sub-agent + `/predict-failures` command + restore_context.py IMMORTAL
+- **관련 ADR**: ADR-024 (P1 봉쇄), ADR-063 (pCCS v3 — 동일 P1 Sandwich 패턴)
+
+### ADR-066: KBSI — Knowledge-Based Self-Improvement
+
+- **날짜**: 2026-03-08
+- **상태**: Accepted
+- **맥락**: 에이전트가 작업 중 발생한 에러와 개선 사항을 학습하지 못하면, 동일한 실수를 반복한다. 학습 결과를 영구적으로 반영하는 메커니즘이 필요했다.
+- **결정**: `/self-improve` slash command — 에러 이력 분석 → 개선안 추출 → `validate_self_improvement.py`(SI-1~SI-6 P1 검증) → AGENTS.md 영구 반영. `self_improve_manager.py`가 insight를 구조화하여 `self-improvement/` 디렉터리에 기록.
+- **근거**: 절대 기준 1(품질) — 시스템이 스스로 학습하면 장기적 품질이 지속 개선됨.
+- **대안**: 에러 로그만 기록 → 기각 (수동 분석 필요, 자동 반영 없음).
+- **파급 효과**: `self_improve_manager.py`, `validate_self_improvement.py`, AGENTS.md (영구 수정)
+- **관련 ADR**: ADR-024 (P1 봉쇄)
+
+### ADR-067: validate_skill_output.py — 스킬 산출물 P1 검증
+
+- **날짜**: 2026-03-09
+- **상태**: Accepted
+- **맥락**: `skill-creator` 스킬이 새 스킬을 생성할 때, SKILL.md의 구조(frontmatter, Inherited DNA, Protocol, Quality, References)가 누락되면 DNA 유전이 불완전해진다.
+- **결정**: `validate_skill_output.py` — SK-1~SK-5 결정론적 구조 검증. SK-1(YAML frontmatter name+description), SK-2(Inherited DNA 섹션), SK-3(### Step N 번호 매기기), SK-4(Quality/pACS 섹션), SK-5(references/ 디렉터리 + .md 파일). CLI: `--skill-dir` 또는 `--skills-root`.
+- **근거**: soul.md DNA 유전 — 스킬이 부모 게놈을 구조적으로 내장하는지 P1 결정론적 검증.
+- **대안**: 수동 체크리스트 → 기각 (자동화 가능한 구조 검증을 수동으로 수행하는 것은 비효율적).
+- **파급 효과**: `validate_skill_output.py`, `_test_validate_skill_output.py` (33 tests), `setup_init.py`
+- **관련 ADR**: ADR-024 (P1 봉쇄), ADR-054 (GroundedClaim Schema)
+
 ---
 
 ## 문서 관리

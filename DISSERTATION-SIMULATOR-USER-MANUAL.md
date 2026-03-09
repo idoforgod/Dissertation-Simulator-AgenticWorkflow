@@ -6,7 +6,7 @@
 | 문서 | 대상 |
 |------|------|
 | **이 문서** (`DISSERTATION-SIMULATOR-USER-MANUAL.md`) | Dissertation Simulator 사용법 — 논문 연구 워크플로우 실행과 운영 |
-| **`DISSERTATION-SIMULATOR-ARCHITECTURE-AND-PHILOSOPHY.md`** | 설계 철학, 아키텍처 조감도, GRA 품질 체계 |
+| **`DISSERTATION-SIMULATOR-ARCHITECTURE-AND-PHILOSOPHY.md`** | 설계 철학, 아키텍처 조감도, 5계층 품질 체계 |
 | **`AGENTICWORKFLOW-USER-MANUAL.md`** | 부모 프레임워크의 사용법 — 워크플로우 설계와 구현 도구 |
 
 ---
@@ -104,7 +104,16 @@ Phase 4: 출판 전략
 | `/thesis-fallback-log` | Fallback 이력 조회 (tier 전환, 사유, 품질 영향) |
 | `/thesis-translate` | 특정 step의 한국어 번역 수동 트리거 (3-Layer 품질 검증 포함) |
 
-### 3.4 학습 모드 명령
+### 3.4 시스템 명령
+
+| 명령 | 설명 |
+|------|------|
+| `/self-improve` | KBSI (Knowledge-Based Self-Improvement) — 에러 분석 → 개선안 추출 → AGENTS.md 영구 반영 |
+| `/predict-failures` | Predictive Debugging — 코드 구조 스캔 → 실패 예측 → 적대적 검증 → 사전 조치 |
+| `/install` | Hook 인프라 검증 + 설치 상태 확인 |
+| `/maintenance` | 시스템 건강 검진 + doc-code 동기화 확인 |
+
+### 3.5 학습 모드 명령
 
 | 명령 | 설명 |
 |------|------|
@@ -113,7 +122,7 @@ Phase 4: 출판 전략
 | `/thesis-learn-practice` | 실습 연습 |
 | `/thesis-learn-progress` | 학습 진행률 표시 |
 
-### 3.5 출판 명령
+### 3.6 출판 명령
 
 | 명령 | 설명 |
 |------|------|
@@ -245,6 +254,34 @@ python .claude/hooks/scripts/query_workflow.py \
 # 차단 요인 확인
 python .claude/hooks/scripts/query_workflow.py \
   --blocked --project-dir thesis-output/my-thesis
+
+# pCCS 이력 조회
+python .claude/hooks/scripts/query_workflow.py \
+  --pccs --project-dir thesis-output/my-thesis
+
+# Step Execution Registry — 특정 step의 실행 파라미터 조회
+python .claude/hooks/scripts/query_step.py \
+  --step 45 --project-dir thesis-output/my-thesis --json
+
+# 특정 에이전트에 할당된 step 목록
+python .claude/hooks/scripts/query_step.py \
+  --list-steps --agent literature-searcher
+
+# 전체 에이전트 목록
+python .claude/hooks/scripts/query_step.py --list-agents
+
+# 스킬 산출물 검증
+python .claude/hooks/scripts/validate_skill_output.py \
+  --skill-dir .claude/skills/my-skill/
+
+# 전체 스킬 일괄 검증
+python .claude/hooks/scripts/validate_skill_output.py \
+  --skills-root .claude/skills/
+
+# pCCS Pipeline 실행
+python .claude/hooks/scripts/run_pccs_pipeline.py \
+  --step-output thesis-output/my-thesis/wave-results/wave-1/literature-search.md \
+  --project-dir thesis-output/my-thesis --step 40
 ```
 
 ---
@@ -272,6 +309,13 @@ thesis-output/my-thesis/
 ├── checkpoints/                  ← 체크포인트 스냅샷
 ├── verification-logs/            ← 검증 로그
 ├── pacs-logs/                    ← pACS 자기 평가 로그
+├── pccs-logs/                    ← pCCS per-claim 신뢰도 로그
+├── review-logs/                  ← L2 Adversarial Review 로그
+├── dialogue-logs/                ← Adversarial Dialogue 반복 로그
+├── diagnosis-logs/               ← Abductive Diagnosis 로그
+├── failure-predictions/          ← Predictive Debugging 결과
+│   └── index.jsonl               ← 실패 예측 SOT (append-only)
+├── self-improvement/             ← KBSI 개선 로그
 └── autopilot-logs/               ← Autopilot 결정 로그
 ```
 

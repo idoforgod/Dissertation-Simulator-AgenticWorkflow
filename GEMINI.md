@@ -13,7 +13,7 @@
 ## 유전 설계 (DNA Inheritance)
 
 이 프로젝트는 자식 agentic workflow system을 생성하는 부모 유기체이다.
-모든 자식 시스템은 부모의 전체 게놈(절대 기준, SOT, 4계층 검증, Safety Hook 등)을 구조적으로 내장한다.
+모든 자식 시스템은 부모의 전체 게놈(절대 기준, SOT, 5계층 검증, Safety Hook 등)을 구조적으로 내장한다.
 상세: `soul.md`, `AGENTS.md §1`.
 
 ## 절대 기준 (핵심 요약)
@@ -73,7 +73,7 @@ AgenticWorkflow에는 210-step 박사 논문 연구 시뮬레이션 워크플로
 |---------------------|----------------|
 | 논문 SOT (`session.json`) | `thesis-output/[project]/session.json` — 시스템 SOT(`state.yaml`)와 독립. Gemini에서는 수동 관리 또는 Python 스크립트로 조작 |
 | Wave/Gate/HITL 아키텍처 | Gate(Wave 간 교차 검증)와 HITL(인간 승인)은 `checklist_manager.py` CLI로 구동. Gemini에서 직접 호출 가능 |
-| 48개 논문 전문 에이전트 + 5개 기반 에이전트 | Gemini는 단일 세션 모델. 에이전트별 역할을 프롬프트로 명시하여 시뮬레이션 |
+| 58개 전문 에이전트 (기반 11 + 논문 46 + 통합 1) | Gemini는 단일 세션 모델. 에이전트별 역할을 프롬프트로 명시하여 시뮬레이션 |
 | 26개 논문 Slash Commands | `/thesis-init` 등은 Claude Code 전용. Gemini에서는 `checklist_manager.py --init` 등 CLI 직접 호출 |
 | GroundedClaim 스키마 | `validate_grounded_claim.py`로 claim ID 검증. Gemini 출력도 동일 스키마 준수 필수 |
 | 3-tier Fallback | Team → Sub-agent → Direct. Gemini는 Direct 실행만 가능 |

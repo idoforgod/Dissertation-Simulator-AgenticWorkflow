@@ -64,7 +64,7 @@ Claude Code가 실행되면 `CLAUDE.md`를 자동으로 읽고, 프로젝트의 
 └─────────────────────────────────┘
 ```
 
-> **DNA 유전**: workflow-generator가 워크플로우를 생성할 때, 부모(AgenticWorkflow)의 전체 게놈(절대 기준, SOT 패턴, 4계층 검증, Safety Hook 등)이 자식 워크플로우에 자동으로 내장됩니다.
+> **DNA 유전**: workflow-generator가 워크플로우를 생성할 때, 부모(AgenticWorkflow)의 전체 게놈(절대 기준, SOT 패턴, 5계층 검증, Safety Hook 등)이 자식 워크플로우에 자동으로 내장됩니다.
 > 사용자가 수동으로 DNA를 설정할 필요 없습니다 — 생산 라인이 구조적으로 유전합니다. 상세: [`soul.md`](soul.md)
 
 ---
@@ -574,15 +574,16 @@ Team Lead ─┬→ @researcher  [Hook: 출처 검증]
 | AskUserQuestion | 사용자 선택 대기 | 품질 극대화 옵션 자동 선택 |
 | `(hook)` exit code 2 | 차단 | **동일하게 차단** |
 
-### 4계층 품질 보장 (Quality Assurance Stack)
+### 5계층 품질 보장 (Quality Assurance Stack)
 
-각 단계 완료 시 최대 4계층 검증을 통과해야 다음 단계로 진행합니다:
+각 단계 완료 시 최대 5계층 검증을 통과해야 다음 단계로 진행합니다:
 
 | 계층 | 이름 | 유형 | 수행 조건 |
 |------|------|------|----------|
 | **L0** | Anti-Skip Guard | 결정론적 | 항상 |
 | **L1** | Verification Gate | 의미론적 | `Verification` 필드 있는 단계 |
 | **L1.5** | pACS (Self-Rating) | 자기 평가 | pACS 활성 + Verification 통과 |
+| **L1.7** | pCCS (per-claim Confidence) | P1 Sandwich | GroundedClaim 산출물 단계 |
 | **L2** | Adversarial Review (Enhanced) | 적대적 검토 | `Review:` 필드 지정 단계 |
 
 **L0: Anti-Skip Guard (결정론적)**
@@ -601,11 +602,17 @@ Team Lead ─┬→ @researcher  [Hook: 출처 검증]
 9. RED(< 50) → **Abductive Diagnosis** 수행 후 진단 기반 재작업, YELLOW(50-69) → 경고 후 진행, GREEN(≥ 70) → 통과
 10. `pacs-logs/step-N-pacs.md`에 Pre-mortem 답변 + 점수 기록
 
+**L1.7: pCCS — predicted Claim Confidence Score (claim 단위 신뢰도 — GroundedClaim 산출물만)**
+11. P1 Sandwich 아키텍처: `compute_pccs_signals.py`(Phase A) → `@claim-quality-evaluator`(Phase B-1) → `validate_pccs_assessment.py`(Phase C) → `@claim-quality-critic`(Phase B-2) → `generate_pccs_report.py`(Phase D)
+12. Claim 유형별 적응 가중치 적용 (FACTUAL:0.50/0.50 → SPECULATIVE:0.15/0.85)
+13. 결정: proceed / rewrite_claims / rewrite_step
+14. `pccs-logs/step-N-pccs.md`에 claim별 점수 + 결정 기록
+
 **L2: Adversarial Review (Enhanced — `Review:` 필드 지정 단계만)**
-11. `@reviewer`(코드/산출물 비판적 분석) 또는 `@fact-checker`(외부 사실 검증) Sub-agent가 독립적으로 적대적 검토
-12. P1 검증(`validate_review.py`)으로 리뷰 품질 결정론적 보장
-13. `review-logs/step-N-review.md`에 기록
-14. 상세: `AGENTS.md §5.5`
+15. `@reviewer`(코드/산출물 비판적 분석) 또는 `@fact-checker`(외부 사실 검증) Sub-agent가 독립적으로 적대적 검토
+16. P1 검증(`validate_review.py`)으로 리뷰 품질 결정론적 보장
+17. `review-logs/step-N-review.md`에 기록
+18. 상세: `AGENTS.md §5.5`
 
 > `Verification` 필드가 없는 단계는 L0(Anti-Skip Guard)만으로 진행합니다 (하위 호환).
 > pACS는 Verification 없이 단독 사용 불가 — L1 통과가 L1.5의 선행 조건입니다.

@@ -94,13 +94,14 @@ AgenticWorkflow/
 │   │   ├── claim-quality-critic.md  (pCCS Phase B-2 — claim 품질 적대적 교차 검증, sonnet)
 │   │   ├── thesis-orchestrator.md   (논문 워크플로우 총괄 — Wave/Gate/HITL 관리)
 │   │   └── ... (48개 논문 전문 에이전트 — 문헌 검색·분석·연구 설계·작성·출판)
-│   ├── commands/                    ← Slash Commands (30개: 시스템 3 + 라우터 1 + 논문 26)
+│   ├── commands/                    ← Slash Commands (31개: 시스템 4 + 라우터 1 + 논문 26)
 │   │   ├── start.md                 (/start — 자연어 시작 트리거 → 스마트 라우터)
 │   │   ├── install.md               (/install — Setup Init 검증)
 │   │   ├── maintenance.md           (/maintenance — 건강 검진)
 │   │   ├── predict-failures.md      (/predict-failures — Predictive Debugging 전체 스캔)
+│   │   ├── self-improve.md          (/self-improve — KBSI 자기 개선 분석)
 │   │   └── thesis-*.md (26개)       (/thesis-init, /thesis-start, /thesis-status, /thesis-translate 등 — 논문 워크플로우)
-│   ├── hooks/scripts/               ← Hook + 검증 스크립트 (57개 프로덕션 + 2개 모듈 + 36개 테스트)
+│   ├── hooks/scripts/               ← Hook + 검증 스크립트 (63개 프로덕션 + 2개 모듈 + 42개 테스트)
 │   │   ├── context_guard.py         (통합 디스패처)
 │   │   ├── _context_lib.py          (공유 라이브러리 — 파싱·생성·검증·압축)
 │   │   ├── _claim_patterns.py       (Claim ID 정규식 SOT — 모든 스크립트 공유 모듈)
@@ -163,7 +164,10 @@ AgenticWorkflow/
 │   │   ├── pccs_calibration.py      (pCCS 교정 delta 계산 — fact-checker/L1 기반, P1 결정론적)
 │   │   ├── run_pccs_pipeline.py     (pCCS P1 Pipeline Runner — DEGRADED/FULL 모드 단일 진입점, 할루시네이션 방지)
 │   │   ├── query_step.py           (Step Execution Registry — H-1~H-4 결정론적 step→agent/tier/critic/pCCS 매핑, P1)
-│   │   └── _test_*.py (39개)        (유닛 테스트 — 각 프로덕션 스크립트 대응)
+│   │   ├── self_improve_manager.py  (KBSI SOT 관리 — register/apply/reject/status/apply-to-agents-md/sync-claude-md/queue-change)
+│   │   ├── validate_self_improvement.py (SI-1~SI-6 insight 검증 — P1 결정론적)
+│   │   ├── validate_skill_output.py (SK-1~SK-5 스킬 산출물 구조 검증 — P1 결정론적, CLI 도구)
+│   │   └── _test_*.py (42개)        (유닛 테스트 — 각 프로덕션 스크립트 대응)
 │   ├── context-snapshots/           ← 런타임 (gitignored)
 │   └── skills/
 │       ├── workflow-generator/      (워크플로우 설계·생성)
@@ -293,3 +297,16 @@ AgenticWorkflow/
 2. **파일 간 역할 분담** 명확히 — SKILL.md(WHY), references/(WHAT/HOW/VERIFY)
 3. **절대 기준 간 충돌 시나리오** 구체적으로 명시
 4. 수정 후 반드시 **절대 기준 관점에서 성찰**
+
+## Knowledge-Based Self-Improvement (KBSI)
+
+워크플로우 실행 과정에서 발견된 오류·개선을 일반화하여 영구 저장하는 자기 개선 시스템. 상세: `AGENTS.md §11`
+
+- **Track 1 (Reactive)**: 오류 → insight → `AGENTS.md §11.4` 영구 저장
+- **Track 2 (Proactive)**: 개선 기회 → 컴포넌트 자동 업데이트 (SAFE=자동, STRUCTURAL=사용자 승인)
+- **SOT**: `self-improvement-logs/state.json` (thesis/system SOT와 독립)
+- **P1 Sandwich**: `validate_self_improvement.py` (SI-1~SI-6) → LLM → `self_improve_manager.py`
+- **Safety**: Immutable boundary + Hub file 탐지 시 자동 STRUCTURAL 분류
+
+<!-- KBSI-START -->
+<!-- KBSI-END -->

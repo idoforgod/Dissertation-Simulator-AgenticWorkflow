@@ -112,6 +112,11 @@ REQUIRED_SCRIPTS = [
     "run_mypy_check.py",
     # Step Execution Registry — H-1~H-4 hallucination containment (Phase L)
     "query_step.py",
+    # KBSI — Knowledge-Based Self-Improvement (Phase M)
+    "self_improve_manager.py",
+    "validate_self_improvement.py",
+    # Skill output validation (Phase N)
+    "validate_skill_output.py",
 ]
 
 # Severity levels

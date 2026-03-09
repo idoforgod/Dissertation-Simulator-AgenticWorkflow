@@ -950,7 +950,8 @@ def advance_step(project_dir: Path, target_step: int, force: bool = False) -> di
     _warn_if_hallucinations(project_dir, current)
 
     # H-5: pCCS compliance guard — verify pCCS decision was honored
-    _warn_if_pccs_noncompliant(sot, current)
+    # Blocks advance if pCCS decision is 'rewrite_claims'/'rewrite_step' unless --force
+    _warn_if_pccs_noncompliant(sot, current, force=force)
 
     # H-6: Review verdict guard — verify L2 review passed (if applicable)
     _warn_if_review_failed(project_dir, current)
@@ -1016,14 +1017,15 @@ def _warn_if_hallucinations(project_dir: Path, step: int) -> None:
         pass  # Non-blocking — advance proceeds regardless
 
 
-def _warn_if_pccs_noncompliant(sot: dict, step: int) -> None:
+def _warn_if_pccs_noncompliant(sot: dict, step: int, force: bool = False) -> None:
     """Check if pCCS decision was honored before advancing (H-5 guard).
 
     If the most recent pCCS result for this step was 'rewrite_claims' or
     'rewrite_step', verify that a subsequent pCCS re-evaluation occurred
-    and returned 'proceed'. Otherwise, warn the Orchestrator.
+    and returned 'proceed'. Otherwise, block the advance unless --force.
 
-    Non-blocking: always returns None. Prints WARNING to stderr if violation.
+    Blocking when force=False: raises ValueError to prevent advancing with
+    unresolved pCCS rewrite decisions. Use --force to override.
     P1 Compliance: reads SOT dict only — no subprocess, no LLM.
     """
     if step <= 0:
@@ -1050,12 +1052,15 @@ def _warn_if_pccs_noncompliant(sot: dict, step: int) -> None:
     # The history dict uses step_key as key, so if the step was re-evaluated,
     # the entry would be overwritten with the new result. If action is still
     # not 'proceed', the rewrite was not re-evaluated or still fails.
-    print(
-        f"[pCCS WARNING] Step {step}: pCCS decision was '{action}' but no "
-        f"subsequent 'proceed' re-evaluation found. The Orchestrator may have "
-        f"skipped the required rewrite. Review pCCS history before accepting.",
-        file=sys.stderr,
+    msg = (
+        f"Step {step}: pCCS decision was '{action}' but no subsequent "
+        f"'proceed' re-evaluation found. Execute the required rewrite "
+        f"and re-run pCCS before advancing."
     )
+    if force:
+        print(f"[pCCS WARNING] {msg} (--force override active)", file=sys.stderr)
+    else:
+        raise ValueError(f"[pCCS BLOCKED] {msg} Use --force to override.")
 
 
 def _warn_if_review_failed(project_dir: Path, step: int) -> None:
