@@ -286,10 +286,10 @@ AgenticWorkflow/
 │   │   └── maintenance.md     (Setup Maintenance 건강 검진 — /maintenance)
 │   ├── hooks/scripts/         ← Context Preservation System + Setup Hooks + Safety Hooks
 │   │   ├── context_guard.py   (Hook 통합 디스패처 — 4개 이벤트의 단일 진입점)
-│   │   ├── _context_lib.py    (공유 라이브러리 — 파싱, 생성, SOT 캡처, Smart Throttling, Autopilot 상태 읽기·검증, ULW 감지·준수 검증, 절삭 상수 중앙화, sot_paths() 경로 통합, 다단계 전환 감지, 결정 품질 태그 정렬, Error Taxonomy 12패턴+Resolution 매칭, Success Patterns(Edit/Write→Bash 성공 시퀀스 추출), IMMORTAL-aware 압축+감사 추적, E5 Guard 중앙화(is_rich_snapshot+update_latest_with_guard), Knowledge Archive 통합(archive_and_index_session — 부분 실패 격리), 경로 태그 추출(extract_path_tags), KI 스키마 검증(_validate_session_facts — RLM 필수 키 보장), SOT 스키마 검증(validate_sot_schema — 워크플로우 state.yaml 구조 무결성 8항목 검증: S1-S6 기본 + S7 pacs 5필드(dimensions, current_step_score, weak_dimension, history, pre_mortem_flag) + S8 active_team 5필드(name, status(partial|all_completed), tasks_completed, tasks_pending, completed_summaries)), Adversarial Review P1 검증(validate_review_output R1-R5, parse_review_verdict, calculate_pacs_delta, validate_review_sequence), Translation P1 검증(validate_translation_output T1-T7, check_glossary_freshness T8, verify_pacs_arithmetic T9 범용, validate_verification_log V1a-V1c), Predictive Debugging P1(aggregate_risk_scores+validate_risk_scores RS1-RS6+_RISK_WEIGHTS 13개 가중치+_RECENCY_DECAY_DAYS 감쇠), pACS P1 검증(validate_pacs_output PA1-PA6 — pACS 로그 구조 무결성: 파일 존재·최소 크기·차원 점수·Pre-mortem·min() 산술·Color Zone), L0 Anti-Skip Guard(validate_step_output L0a-L0c — 산출물 파일 존재+최소 크기+비공백), Team Summaries KI 아카이브(_extract_team_summaries — SOT active_team.completed_summaries → KI 보존), Abductive Diagnosis Layer(diagnose_failure_context 사전 증거 수집 + validate_diagnosis_log AD1-AD10 사후 검증 + _extract_diagnosis_patterns KA 아카이빙 + Fast-Path FP1-FP3 + 가설 우선순위 H1/H2/H3), 모듈 레벨 regex 컴파일(9개+8개+8개+4개+5개 패턴 — 프로세스당 1회))
+│   │   ├── _context_lib.py    (공유 라이브러리 — 파싱, 생성, SOT 캡처, Smart Throttling, Autopilot 상태 읽기·검증, ULW 감지·준수 검증, 절삭 상수 중앙화, sot_paths() 경로 통합, 다단계 전환 감지, 결정 품질 태그 정렬, Error Taxonomy 12패턴+Resolution 매칭, Success Patterns(Edit/Write→Bash 성공 시퀀스 추출), IMMORTAL-aware 압축+감사 추적, E5 Guard 중앙화(is_rich_snapshot+update_latest_with_guard), Knowledge Archive 통합(archive_and_index_session — 부분 실패 격리), 경로 태그 추출(extract_path_tags), KI 스키마 검증(_validate_session_facts — RLM 필수 키 보장), SOT 스키마 검증(validate_sot_schema — 워크플로우 state.yaml 구조 무결성 8항목 검증: S1-S6 기본 + S7 pacs 5필드(dimensions, current_step_score, weak_dimension, history, pre_mortem_flag) + S8 active_team 5필드(name, status(partial|all_completed), tasks_completed, tasks_pending, completed_summaries)), Adversarial Review P1 검증(validate_review_output R1-R5, parse_review_verdict, calculate_pacs_delta, validate_review_sequence), Translation P1 검증(validate_translation_output T1-T7, check_glossary_freshness T8, verify_pacs_arithmetic T9 범용, validate_verification_log V1a-V1c), Predictive Debugging P1(aggregate_risk_scores+validate_risk_scores RS1-RS6+_RISK_WEIGHTS 13개 가중치+_RECENCY_DECAY_DAYS 감쇠), pACS P1 검증(validate_pacs_output PA1-PA6 — pACS 로그 구조 무결성: 파일 존재·최소 크기·차원 점수·Pre-mortem·min() 산술·Color Zone), L0 Anti-Skip Guard(validate_step_output L0a-L0c — 산출물 파일 존재+최소 크기+비공백), Team Summaries KI 아카이브(_extract_team_summaries — SOT active_team.completed_summaries → KI 보존), Abductive Diagnosis Layer(diagnose_failure_context 사전 증거 수집 + validate_diagnosis_log AD1-AD10 사후 검증 + _extract_diagnosis_patterns KA 아카이빙 + Fast-Path FP1-FP3 + 가설 우선순위 H1/H2/H3), 모듈 레벨 regex 컴파일(9개+8개+8개+4개+5개 패턴 — 프로세스당 1회), QO-5 KI 품질 필드(previous_section_outputs+review_feedback_summary(parse_review_verdict 재사용)+word_count_trend — 크로스세션 품질 컨텍스트))
 │   │   ├── _claim_patterns.py (Claim ID 정규식 SOT — 47개 prefix 패턴 중앙화, 모든 claim 관련 스크립트가 import)
 │   │   ├── save_context.py    (저장 엔진)
-│   │   ├── restore_context.py (복원 — RLM 포인터 + 완료/Git 상태 + Predictive Debugging 위험 점수 캐시 생성)
+│   │   ├── restore_context.py (복원 — RLM 포인터 + 완료/Git 상태 + Predictive Debugging 위험 점수 캐시 생성 + QO-1~4 품질 최적화: Gate 피드백(JSON+state machine), 이전 섹션 요약(정확한 워드카운트), 11개 scoring signal ACTIVE RETRIEVAL, step 메타데이터)
 │   │   ├── update_work_log.py (작업 로그 누적 — 9개 도구 추적)
 │   │   ├── generate_context_summary.py (증분 스냅샷 + Knowledge Archive + E5 Guard + Autopilot Decision Log 안전망 + ULW Compliance 안전망)
 │   │   ├── setup_init.py      (Setup Init — 인프라 건강 검증 + SOT 쓰기 패턴 검증(P1 할루시네이션 봉쇄), --init 트리거)
@@ -348,7 +348,7 @@ AgenticWorkflow/
 - RLM 패턴 적용: 작업 내역을 **외부 메모리 객체**(MD 파일)로 영속화하고, 새 세션에서 포인터 기반으로 복원
 - P1 원칙 준수: 트랜스크립트 파싱·통계 산출은 Python 코드가 결정론적으로 수행. AI는 의미 해석에만 집중
 - 절대 기준 2 준수: SOT 파일(`state.yaml`)은 **읽기 전용**으로만 접근. 스냅샷은 별도 디렉터리(`context-snapshots/`)에 저장
-- **Knowledge Archive**: 세션 간 지식 축적 — `knowledge-index.jsonl`에 세션 사실을 결정론적으로 추출·축적. Stop hook과 SessionEnd/PreCompact 모두에서 기록하여 세션의 100% 인덱싱 보장. 각 엔트리에 completion_summary(도구 성공/실패), git_summary(변경 상태), session_duration_entries(세션 길이), phase(세션 단계), phase_flow(다단계 전환 흐름), primary_language(주요 파일 확장자), error_patterns(Error Taxonomy 12패턴 분류 + resolution 매칭), tool_sequence(RLE 압축 도구 시퀀스), final_status(success/incomplete/error/unknown), tags(경로 기반 검색 태그 — CamelCase/snake_case 분리 + 확장자 매핑) 포함. AI가 Grep으로 프로그래밍적 탐색 (RLM 패턴)
+- **Knowledge Archive**: 세션 간 지식 축적 — `knowledge-index.jsonl`에 세션 사실을 결정론적으로 추출·축적. Stop hook과 SessionEnd/PreCompact 모두에서 기록하여 세션의 100% 인덱싱 보장. 각 엔트리에 completion_summary(도구 성공/실패), git_summary(변경 상태), session_duration_entries(세션 길이), phase(세션 단계), phase_flow(다단계 전환 흐름), primary_language(주요 파일 확장자), error_patterns(Error Taxonomy 12패턴 분류 + resolution 매칭), success_patterns(Edit/Write→Bash 성공 시퀀스), tool_sequence(RLE 압축 도구 시퀀스), final_status(success/incomplete/error/unknown), tags(경로 기반 검색 태그 — CamelCase/snake_case 분리 + 확장자 매핑), previous_section_outputs(QO-5a: step별 제목+워드카운트), review_feedback_summary(QO-5b: `parse_review_verdict()` 기반 정확한 verdict/count), word_count_trend(QO-5c: 단계별 분량 추세) 포함. ACTIVE RETRIEVAL은 11개 scoring signal(keyword, file, tag, error, step, invocation proximity, design decisions, tool sequence, phase alignment, success patterns)로 관련 세션 검색 (RLM 패턴)
 - **Resume Protocol**: 스냅샷에 결정론적 복원 지시 포함 — 수정/참조 파일 목록, 세션 메타데이터, 완료 상태(도구 성공/실패), Git 변경 상태. **동적 RLM 쿼리 힌트**: 수정 파일 경로에서 추출한 태그(`extract_path_tags()`)와 에러 정보를 기반으로 세션별 맞춤 Grep 쿼리 예시를 자동 생성. 복원 품질의 바닥선 보장
 - **Autopilot 런타임 강화**: Autopilot 활성 시 스냅샷에 Autopilot 상태 섹션(IMMORTAL 우선순위)을 포함하고, 세션 복원 시 실행 규칙을 컨텍스트에 주입. Stop hook이 Decision Log 누락을 감지·보완
 - **ULW 모드 감지·보존**: `detect_ulw_mode()`가 트랜스크립트에서 word-boundary 정규식으로 `ulw` 키워드를 감지. 활성 시 스냅샷에 ULW 상태 섹션(IMMORTAL 우선순위)을 포함하고, SessionStart가 3개 강화 규칙(Intensifiers)을 컨텍스트에 주입. `check_ulw_compliance()`가 준수를 결정론적으로 검증. Knowledge Archive에 `ulw_active: true` 태깅
@@ -377,6 +377,7 @@ AgenticWorkflow/
                                                      │        + sessions/ 아카이빙
                                                      ↓
 새 세션 시작 ──→ [SessionStart] restore_context.py ───────→ 포인터+요약+완료상태+Git상태 출력
+                                                     │        + QO-1~4 IMMORTAL 품질 최적화
                                                      AI가 Read tool로 전체 복원
 ```
 
@@ -1347,11 +1348,13 @@ LLM 진단을 건너뛰는 결정론적 단축 경로:
 
 ### doctoral-writing
 
-박사급 학위 논문의 학문적 엄밀성과 명료성을 갖춘 글쓰기 스킬.
+박사급 학위 논문의 학문적 엄밀성과 명료성을 갖춘 글쓰기 스킬. **전체 47개 텍스트 생성 에이전트에 통합** (ADR-072).
 
 - **트리거**: "논문 스타일로 써줘", "학술적 글쓰기", "논문 문장 다듬기"
 - **진입점**: `.claude/skills/doctoral-writing/SKILL.md`
 - **핵심 원칙**: 명료성, 간결성, 학술적 엄밀성, 논리적 흐름
+- **4-Layer Defense-in-Depth**: (1) P1 Prompt Injection (`_WRITING_STANDARD_SUFFIX` in `query_step.py`), (2) 47개 에이전트 `.md` 참조, (3) `thesis-reviewer.md` DW 프레임워크, (4) `verify_step_output.py` VO-6/VO-7 P1 탐지
+- **H-8 Decision Point**: `generate_single_step_prompt()`로 단일 Step 프롬프트도 P1 결정론적 생성
 
 ---
 
@@ -1471,9 +1474,9 @@ AGENTS.md의 절대 기준이 변경되면, 모든 Spoke 파일의 인라인 복
 | Gate (5개) | Wave 간 교차 검증. Claim 품질 임계값 미달 시 진행 차단 | L1 Verification Gate |
 | HITL (9개) | 인간 승인 필수 지점. 연구 방향·방법론·최종 산출물 | L2 Adversarial Review |
 | 3-tier Fallback | Team → Sub-agent → Direct 실행 | P2 전문성 기반 위임 |
-| Step Consolidation | 동일 에이전트 연속 Step을 단일 호출로 통합 (211 step → 17 Orchestrator invocations). `query_step.py`의 3개 P1 함수로 결정론적 제어 | P1 데이터 정제 |
+| Step Consolidation | 동일 에이전트 연속 Step을 단일 호출로 통합 (211 step → 17 Orchestrator invocations). `query_step.py`의 4개 P1 함수로 결정론적 제어 | P1 데이터 정제 |
 | Consolidation Fallback | 통합 그룹 3회 실패 → `split_consolidated_group()` P1 binary split → 개별 Step 분리 재시도 | Bounded Retry Escalation |
-| Hallucination Containment | V-1~V-4 취약점 + GAP-1~GAP-6을 P1 결정론적 스크립트로 봉쇄 (ADR-071). `verify_step_output.py` + `determine_dialogue_outcome.py` + `split_consolidated_group()` | P1 Sandwich 확장 |
+| Hallucination Containment | V-1~V-4 취약점 + GAP-1~GAP-6을 P1 결정론적 스크립트로 봉쇄 (ADR-071). `verify_step_output.py`(VO-1~VO-7) + `determine_dialogue_outcome.py` + `split_consolidated_group()` + H-8 단일 Step 프롬프트 P1 생성 | P1 Sandwich 확장 |
 | Checkpoint | SOT + 체크리스트 스냅샷 저장·복원 | Context Preservation |
 
 ### 10.4 핵심 인프라
@@ -1484,7 +1487,7 @@ AGENTS.md의 절대 기준이 변경되면, 모든 Spoke 파일의 인라인 복
 | `query_workflow.py` | 논문 관측성 (dashboard/weakest-step/blocked/retry/error-trends) |
 | `validate_grounded_claim.py` | GroundedClaim ID·스키마 검증 |
 | `fallback_controller.py` | 3-tier Fallback 제어 + `split_consolidated_group()` P1 결정론적 그룹 분할 (V-4 제거) |
-| `verify_step_output.py` | **Step Output Verification** — VO-1~VO-5 결정론적 산출물 검증. V-1, GAP-3, GAP-4 제거 (ADR-071) |
+| `verify_step_output.py` | **Step Output Verification** — VO-1~VO-7 결정론적 산출물 검증. V-1, GAP-3, GAP-4, GAP-DW 제거 (ADR-071, ADR-072) |
 | `determine_dialogue_outcome.py` | **Dialogue Outcome Decision** — P1 결정론적 대화 루프 종료 판단. V-2 제거 (ADR-071) |
 | `guard_sot_write.py` | 논문 SOT 쓰기 보호 (병렬 에이전트 충돌 방지) |
 | `compute_srcs_scores.py` | SRCS 4축 결정론적 점수 계산 |
@@ -1492,7 +1495,7 @@ AGENTS.md의 절대 기준이 변경되면, 모든 Spoke 파일의 인라인 복
 | `validate_step_sequence.py` | 스텝 순서·의존성 검증 |
 | `validate_thesis_output.py` | 산출물 파일 존재·크기·TO5 heading·TO6 prefix 검증 (consolidated mode 지원) |
 | `validate_srcs_threshold.py` | SRCS 75점 임계값 검증 |
-| `query_step.py` | Step Execution Registry — H-1~H-7 결정론적 step→agent/tier/critic/pCCS 매핑, 통합 prompt 생성, 다음 실행 Step 계산, invocation plan (ADR-064) |
+| `query_step.py` | Step Execution Registry — H-1~H-8 결정론적 step→agent/tier/critic/pCCS 매핑, 통합/단일 prompt 생성, 다음 실행 Step 계산, invocation plan (ADR-064, ADR-072) |
 | `validate_task_completion.py` | 태스크 완료 검증 (CLI-only, Orchestrator 호출) |
 | `teammate_health_check.py` | 에이전트 팀 건강 점검 |
 | `verify_translation_terms.py` | T10-T12 번역 콘텐츠 보존 검증 (P1) |

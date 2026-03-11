@@ -3034,6 +3034,10 @@ _KI_REQUIRED_DEFAULTS = {
     "thesis_step": None,  # CM-3: thesis current_step at archive time (int or None)
     "gate_results": {},  # R-12: cross-session gate pass/fail tracking (e.g. {"gate-1": "pass"})
     "invocation_number": None,  # B-3: active invocation number at archive time (int or None)
+    # QO-5: Quality context fields for cross-session quality optimization
+    "previous_section_outputs": [],  # QO-5a: titles + word counts of last N outputs
+    "review_feedback_summary": "",  # QO-5b: latest review feedback summary
+    "word_count_trend": [],  # QO-5c: per-step word counts for pacing
 }
 
 
@@ -3874,6 +3878,105 @@ def extract_session_facts(session_id, trigger, project_dir, entries, token_estim
                     if hitl_summary:
                         facts["hitl_decisions"] = hitl_summary
                     break
+    except Exception:
+        pass  # Non-blocking
+
+    # QO-5: Quality context fields for cross-session optimization
+    # QO-5a: Previous section outputs — titles + word counts from thesis outputs
+    try:
+        thesis_root = os.path.join(project_dir, "thesis-output")
+        if os.path.isdir(thesis_root):
+            for proj_name in sorted(os.listdir(thesis_root)):
+                sot_file = os.path.join(thesis_root, proj_name, "session.json")
+                if not os.path.isfile(sot_file):
+                    continue
+                try:
+                    with open(sot_file, "r", encoding="utf-8") as f:
+                        sot_data_qo = json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    continue
+                outputs_qo = sot_data_qo.get("outputs", {})
+                if not isinstance(outputs_qo, dict):
+                    continue
+                prev_outputs: list[dict] = []
+                proj_root = os.path.join(thesis_root, proj_name)
+                for key, val in sorted(outputs_qo.items()):
+                    if not key.startswith("step-") or key.endswith("-ko"):
+                        continue
+                    try:
+                        step_n = int(key.replace("step-", ""))
+                    except (ValueError, TypeError):
+                        continue
+                    file_path_qo = val if isinstance(val, str) else ""
+                    if file_path_qo:
+                        full = os.path.join(proj_root, file_path_qo)
+                        if os.path.exists(full):
+                            try:
+                                # H-2 Fix: Read full file for accurate word count.
+                                # Previous 2KB cap severely undercounted large sections.
+                                with open(full, "r", encoding="utf-8") as f:
+                                    full_text = f.read()
+                                wc = len(full_text.split())
+                                # Heading extraction uses first 2KB only
+                                title = ""
+                                for ln in full_text[:2000].split("\n"):
+                                    if ln.strip().startswith("## "):
+                                        title = ln.strip()[3:].strip()[:60]
+                                        break
+                                prev_outputs.append({
+                                    "step": step_n,
+                                    "title": title,
+                                    "words": wc,
+                                })
+                            except (IOError, OSError):
+                                continue
+                if prev_outputs:
+                    facts["previous_section_outputs"] = prev_outputs[-10:]  # Last 10
+                    # QO-5c: Word count trend
+                    facts["word_count_trend"] = [
+                        {"step": p["step"], "words": p["words"]}
+                        for p in prev_outputs[-10:]
+                    ]
+                break  # First active project only
+    except Exception:
+        pass  # Non-blocking
+
+    # QO-5b: Review feedback summary — from latest review log
+    # H-3 Fix: Use parse_review_verdict() (same file) for deterministic extraction.
+    # Previous raw regex ("VERDICT" in line) caused false positives on descriptive text.
+    try:
+        thesis_root_rv = os.path.join(project_dir, "thesis-output")
+        if os.path.isdir(thesis_root_rv):
+            for proj_name_rv in sorted(os.listdir(thesis_root_rv)):
+                review_dir = os.path.join(thesis_root_rv, proj_name_rv, "review-logs")
+                if not os.path.isdir(review_dir):
+                    continue
+                review_files = [
+                    os.path.join(review_dir, f) for f in os.listdir(review_dir)
+                    if f.endswith(".md")
+                ]
+                if not review_files:
+                    continue
+                review_files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
+                latest_review = review_files[0]
+                try:
+                    verdict_data = parse_review_verdict(latest_review)
+                    rv_name = os.path.basename(latest_review)
+                    verdict_str = verdict_data.get("verdict") or "UNKNOWN"
+                    critical_n = verdict_data.get("critical_count", 0)
+                    warning_n = verdict_data.get("warning_count", 0)
+                    suggestion_n = verdict_data.get("suggestion_count", 0)
+                    parts: list[str] = [rv_name, f"Verdict: {verdict_str}"]
+                    if critical_n:
+                        parts.append(f"Critical: {critical_n}")
+                    if warning_n:
+                        parts.append(f"Warnings: {warning_n}")
+                    if suggestion_n:
+                        parts.append(f"Suggestions: {suggestion_n}")
+                    facts["review_feedback_summary"] = " | ".join(parts)
+                except (IOError, OSError):
+                    pass
+                break  # First project only
     except Exception:
         pass  # Non-blocking
 

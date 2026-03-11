@@ -9,6 +9,7 @@ This eliminates:
   - V-1: Output File Path Verification (LLM glob interpretation)
   - GAP-3: Claim prefix mismatch (wrong agent claims pass through)
   - GAP-4: Missing content validation (placeholder output passes)
+  - GAP-DW: Non-doctoral writing quality escapes detection
 
 Usage:
     python3 verify_step_output.py --step 42 --project-dir thesis-output/my-thesis
@@ -40,6 +41,8 @@ Checks:
     VO-3: No placeholder content (Lorem ipsum, TODO, FIXME, [insert], etc.)
     VO-4: Tier A steps (has_grounded_claims) → at least 1 GroundedClaim
     VO-5: Claim prefix matches expected agent prefix
+    VO-6: No banned academic expressions (WARNING, non-blocking)
+    VO-7: Heading structure present for files >2000 bytes (FAIL)
 
 Exit codes:
     0 — always (P1 compliant, non-blocking)
@@ -101,6 +104,54 @@ _PLACEHOLDER_PATTERNS: list[re.Pattern[str]] = [
 
 # Minimum non-whitespace content ratio (prevent mostly-whitespace files)
 _MIN_CONTENT_RATIO = 0.3
+
+# =============================================================================
+# Banned Academic Expressions (VO-6, P1 deterministic — WARNING only)
+# =============================================================================
+# These wordy/filler expressions indicate non-doctoral writing quality.
+# Based on .claude/skills/doctoral-writing/references/common-issues.md
+
+_BANNED_EXPRESSION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"\bit is important to note that\b",
+        r"\bit goes without saying\b",
+        r"\bneedless to say\b",
+        r"\bit should be noted that\b",
+        r"\bit is worth mentioning that\b",
+        r"\bin order to\b",
+        r"\bdue to the fact that\b",
+        r"\bin spite of the fact that\b",
+        r"\bfor the purpose of\b",
+        r"\bat this point in time\b",
+        r"\bin the event that\b",
+        r"\bfirst and foremost\b",
+        r"\beach and every\b",
+        r"\blast but not least\b",
+    ]
+]
+
+# Agents exempt from VO-6/VO-7 (non-text-producing or special roles)
+_DW_CHECK_EXEMPT_AGENTS: set[str] = {
+    "_orchestrator", "translator",
+}
+
+# Minimum heading threshold (VO-7)
+_HEADING_MIN_BYTES = 2000
+
+
+def _detect_banned_expressions(content: str) -> list[str]:
+    """Detect banned academic expressions. Returns list of matched patterns."""
+    found: list[str] = []
+    for pattern in _BANNED_EXPRESSION_PATTERNS:
+        matches = pattern.findall(content)
+        if matches:
+            found.append(matches[0])
+    return found
+
+
+def _has_heading_structure(content: str) -> bool:
+    """Check if content has at least one markdown heading (## or deeper)."""
+    return bool(re.search(r'^#{2,}\s+\S', content, re.MULTILINE))
 
 
 def _detect_placeholders(content: str) -> list[str]:
@@ -317,6 +368,39 @@ def verify_step_output(
         )
     else:
         checks["VO5_prefix_match"] = "SKIP (no claims to verify)"
+
+    # ===================================================================
+    # VO-6: No banned academic expressions (WARNING — non-blocking)
+    # ===================================================================
+    if agent not in _DW_CHECK_EXEMPT_AGENTS and content:
+        banned = _detect_banned_expressions(content)
+        if banned:
+            checks["VO6_no_banned_expr"] = "WARN"
+            warnings.append(
+                f"VO-6: Banned academic expressions detected (doctoral writing "
+                f"quality): {', '.join(repr(b) for b in banned[:5])}"
+            )
+        else:
+            checks["VO6_no_banned_expr"] = "PASS"
+    else:
+        checks["VO6_no_banned_expr"] = f"SKIP (agent '{agent}' exempt)"
+
+    # ===================================================================
+    # VO-7: Heading structure for files >2000 bytes (FAIL)
+    # ===================================================================
+    if agent not in _DW_CHECK_EXEMPT_AGENTS and content and file_size >= _HEADING_MIN_BYTES:
+        if _has_heading_structure(content):
+            checks["VO7_heading_structure"] = "PASS"
+        else:
+            checks["VO7_heading_structure"] = "FAIL"
+            errors.append(
+                f"VO-7: File is {file_size} bytes but has no heading structure "
+                f"(expected at least one ## heading)"
+            )
+    elif agent in _DW_CHECK_EXEMPT_AGENTS:
+        checks["VO7_heading_structure"] = f"SKIP (agent '{agent}' exempt)"
+    else:
+        checks["VO7_heading_structure"] = "SKIP (file < 2000 bytes)"
 
     # Compute overall result
     is_valid = not any(v == "FAIL" for v in checks.values())

@@ -145,12 +145,13 @@ query_step.py --step {N} --json
      min_bytes = result["min_output_bytes"]
 ```
 
-Call the appropriate agent definition via the Agent tool:
+Call the appropriate agent definition via the Agent tool. **Both paths use P1 helpers — do NOT construct prompts manually:**
 ```
 # Single step:
-Agent: subagent_type="{agent-name}", prompt="Execute step {N}: {step_description}.
-  Research topic: {topic}. Output to: {output_path}.
-  Use GroundedClaim schema for all claims."
+# Use P1 helper to generate the COMPLETE prompt (H-8: includes doctoral writing standard):
+python3 .claude/hooks/scripts/query_step.py \
+  --single-prompt --step {N} --topic "{research_topic}" \
+  --context "{any_additional_context}" --project-dir {dir} --json
 
 # Consolidated group (e.g., steps 39-42):
 # Use P1 helper to generate the COMPLETE prompt (zero LLM template filling):
@@ -158,10 +159,11 @@ python3 .claude/hooks/scripts/query_step.py \
   --consolidated-prompt --step {first} --topic "{research_topic}" \
   --checklist {dir}/todo-checklist.md --project-dir {dir} --json
 
-# The --json output contains: {"prompt": "...", "agent": "...", "output_file": "...", "min_output_bytes": N}
+# Both --json outputs contain: {"prompt": "...", "agent": "...", "output_file": "...", "min_output_bytes": N}
 # Use the pre-rendered prompt DIRECTLY — do NOT modify or reconstruct it:
 Agent: subagent_type="{result.agent}", prompt="{result.prompt}"
 ```
+**Note:** The `--context` flag in `--single-prompt` is optional. Use it to pass chapter-specific instructions (e.g., "Reference wave-results/ for this chapter. Follow thesis outline in phase-3/thesis-outline.md.").
 If the sub-agent fails 3 times, escalate to Tier 3 via the Fallback Protocol.
 
 **E4. Execute (Tier 3 — Direct):**
@@ -198,6 +200,8 @@ python3 .claude/hooks/scripts/fallback_controller.py \
    - VO-3: No placeholder content (TODO, FIXME, lorem ipsum, [insert], etc.)
    - VO-4: Tier A steps → at least 1 GroundedClaim present
    - VO-5: Claim prefix matches expected agent prefix
+   - VO-6: No banned academic expressions (WARNING — non-blocking, log for review)
+   - VO-7: Heading structure present for files >2KB (FAIL)
    - **NEVER skip this check. NEVER manually override `valid: false`.**
 2. Record sub-step:
    ```bash

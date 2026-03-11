@@ -52,6 +52,22 @@ _ENGLISH_STOP_WORDS = frozenset({
     "me", "my", "us", "vs",
 })
 
+# A-2: Extended stop words for design decision token matching.
+# _tokenize() filters 2-char stops, but decision sentences contain common
+# 3+ char words (verbs, prepositions) that cause false relevance matches.
+# Technical terms (P1, SOT, CCP, LLM, etc.) are preserved by _tokenize's
+# acronym extraction and are NOT in this list.
+_DECISION_EXTRA_STOP_WORDS = frozenset({
+    "the", "for", "and", "but", "not", "with", "from", "that", "this",
+    "was", "are", "were", "has", "had", "have", "been", "being",
+    "did", "does", "will", "can", "may", "its", "all", "also",
+    "into", "than", "then", "when", "which", "who", "how", "each",
+    "use", "used", "using", "added", "add", "switched", "changed",
+    "moved", "removed", "made", "new", "now", "based", "because",
+    "instead", "more", "only", "after", "before", "between", "about",
+    "over", "per", "via", "due",
+})
+
 
 def _tokenize(text):
     """Split text into keyword tokens for relevance scoring.
@@ -155,6 +171,7 @@ def main():
         project_dir=project_dir,
         snapshot_content=snapshot_content,
         risk_data=risk_data,
+        compression_note=compression_note,
     )
 
     # Output to stdout — Claude receives this as session context
@@ -803,26 +820,46 @@ def _build_active_thesis_step_block(project_dir: str) -> list[str]:
     except Exception:
         pass  # Non-blocking: query_step.py may not exist in non-thesis projects
 
-    # B-2: Consolidated group state — surface if current step is mid-consolidation
-    # P1 Compliance: Uses get_next_execution_step() (deterministic, handles restart logic).
+    # B-2 + QO-4: Consolidated group state with enhanced metadata.
+    # P1 Compliance: Uses get_next_execution_step() + query_step() (deterministic).
+    # QO-4: Also surfaces expected output path, min_output_bytes, and tier.
     # Eliminates LLM math — Orchestrator reads the result, doesn't compute.
     try:
-        from query_step import get_next_execution_step
+        from query_step import get_next_execution_step, query_step as qs_query
         next_info = get_next_execution_step(current_step)
         ns = next_info.get("next_step")
         if ns is not None:
             reason = next_info.get("reason", "normal")
             cg = next_info.get("consolidated_group")
+            agent_name = next_info.get("agent", "?")
             if reason == "restart_consolidated_group" and cg:
                 lines.append(
                     f"→ RESTART consolidated group Steps {min(cg)}-{max(cg)} "
-                    f"({next_info.get('agent', '?')}) — mid-group context reset detected"
+                    f"({agent_name}) — mid-group context reset detected"
                 )
             elif cg:
                 lines.append(
                     f"→ Next: consolidated group Steps {min(cg)}-{max(cg)} "
-                    f"({next_info.get('agent', '?')})"
+                    f"({agent_name})"
                 )
+
+            # QO-4: Surface execution metadata for the next step
+            try:
+                research_type = sot.get("research_type", "undecided")
+                step_meta = qs_query(ns, research_type)
+                if "error" not in step_meta:
+                    output_path = step_meta.get("output_path", "?")
+                    min_bytes = step_meta.get("min_output_bytes", "?")
+                    tier = step_meta.get("tier", "?")
+                    has_claims = step_meta.get("has_grounded_claims", False)
+                    pccs_mode = step_meta.get("pccs_mode", "SKIP")
+                    lines.append(
+                        f"→ Step {ns} metadata: output={output_path}, "
+                        f"min={min_bytes}B, tier={tier}, "
+                        f"claims={'yes' if has_claims else 'no'}, pCCS={pccs_mode}"
+                    )
+            except Exception:
+                pass  # Non-blocking
     except Exception:
         pass  # Non-blocking
 
@@ -1250,6 +1287,205 @@ def _surface_self_improvement_state(project_dir: str) -> list[str]:
     return lines
 
 
+def _surface_recent_gate_feedback(project_dir: str) -> list[str]:
+    """QO-1: Surface recent gate feedback for IMMORTAL section.
+
+    Reads gate-reports/ for the most recent gate report and extracts
+    specific failure reasons. Enables agents to see WHY a gate failed,
+    not just that it did. Critical for guided revision after context reset.
+
+    IMMORTAL: Gate failure reasons must survive compression for revision.
+    P1 Compliance: Deterministic file read + regex — zero LLM.
+    SOT Compliance: Read-only (gate-reports/).
+    Returns: list of lines (empty if no gate feedback).
+    """
+    if not project_dir:
+        return []
+
+    # Find thesis project directory
+    sot_path, sot = _read_active_thesis_sot(project_dir)
+    if not sot_path or not sot:
+        return []
+
+    project_root = os.path.dirname(sot_path)
+    gate_dir = os.path.join(project_root, "gate-reports")
+    if not os.path.isdir(gate_dir):
+        return []
+
+    # Find most recent gate report
+    gate_files = []
+    for f in os.listdir(gate_dir):
+        if f.endswith(".md") or f.endswith(".json"):
+            gate_files.append(os.path.join(gate_dir, f))
+    if not gate_files:
+        return []
+
+    gate_files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
+    latest_gate = gate_files[0]
+
+    try:
+        with open(latest_gate, "r", encoding="utf-8") as f:
+            content = f.read(10_000)  # Cap at 10KB
+    except (IOError, OSError):
+        return []
+
+    if not content.strip():
+        return []
+
+    lines: list[str] = []
+    gate_name = os.path.basename(latest_gate).replace(".md", "").replace(".json", "")
+    lines.append("■ RECENT GATE FEEDBACK (IMMORTAL — revision guidance):")
+    lines.append(f"  Gate: {gate_name}")
+
+    # H-1 Fix: Precise gate feedback extraction — JSON first, structured MD fallback.
+    # Previous regex ("FAIL" in line) caused false positives on descriptive text.
+    fail_items: list[str] = []
+    warn_items: list[str] = []
+    gate_status = ""
+
+    if latest_gate.endswith(".json"):
+        # JSON gate report (validate_wave_gate.py --output-json): deterministic fields
+        try:
+            gate_data = json.loads(content)
+            gate_status = str(gate_data.get("status", "")).upper()
+            for err in gate_data.get("errors", []):
+                if isinstance(err, str):
+                    fail_items.append(err[:150])
+            for wrn in gate_data.get("warnings", []):
+                if isinstance(wrn, str):
+                    warn_items.append(wrn[:150])
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+    else:
+        # MD gate report: state machine — only extract items within structured sections
+        section = None  # None | "errors" | "warnings"
+        for report_line in content.split("\n"):
+            stripped = report_line.strip()
+            # Detect section transitions
+            if stripped.lower().startswith("errors:") or stripped == "## Errors":
+                section = "errors"
+                continue
+            elif stripped.lower().startswith("warnings:") or stripped == "## Warnings":
+                section = "warnings"
+                continue
+            elif stripped.lower().startswith("status:"):
+                m = re.match(r"status:\s*(\w+)", stripped, re.IGNORECASE)
+                if m:
+                    gate_status = m.group(1).upper()
+                section = None
+                continue
+            elif stripped.startswith("#") or stripped.startswith("Gate:") or \
+                    stripped.startswith("Files:") or stripped.startswith("Total "):
+                section = None
+                continue
+            # Extract items within active section (indented "- " bullets only)
+            if section == "errors" and stripped.startswith("- "):
+                fail_items.append(stripped[2:].strip()[:150])
+            elif section == "warnings" and stripped.startswith("- "):
+                warn_items.append(stripped[2:].strip()[:150])
+            # Checklist-style "- [ ]" (unchecked = fail) is always valid
+            elif stripped.startswith("- [ ] "):
+                fail_items.append(stripped[6:].strip()[:150])
+
+    if gate_status:
+        lines.append(f"  Status: {gate_status}")
+    if fail_items:
+        lines.append(f"  Failures ({len(fail_items)}):")
+        for fi in fail_items[:5]:
+            lines.append(f"    - {fi}")
+    if warn_items:
+        lines.append(f"  Warnings ({len(warn_items)}):")
+        for wi in warn_items[:3]:
+            lines.append(f"    - {wi}")
+    if not fail_items and not warn_items and gate_status != "FAIL":
+        lines.append("  Status: All checks passed (no revision needed)")
+
+    return lines
+
+
+def _surface_previous_sections_summary(project_dir: str) -> list[str]:
+    """QO-2: Surface previous section outputs for IMMORTAL section.
+
+    Reads thesis-output/*/wave-results/ and thesis-output/*/phase-*/ for
+    the most recently completed step outputs. Surfaces title, word count,
+    and key headings to maintain narrative coherence across compression.
+
+    IMMORTAL: Previous section context is critical for coherent writing.
+    P1 Compliance: Deterministic file read + regex — zero LLM.
+    SOT Compliance: Read-only (output files).
+    Returns: list of lines (empty if no previous outputs).
+    """
+    if not project_dir:
+        return []
+
+    sot_path, sot = _read_active_thesis_sot(project_dir)
+    if not sot_path or not sot:
+        return []
+
+    project_root = os.path.dirname(sot_path)
+    current_step = sot.get("current_step", 0)
+    if not isinstance(current_step, int) or current_step <= 1:
+        return []
+
+    # Collect output files from outputs/ record in SOT
+    outputs = sot.get("outputs", {})
+    if not isinstance(outputs, dict):
+        return []
+
+    # Get last 5 completed step outputs (most recent first)
+    step_files: list[tuple[int, str]] = []
+    for key, val in outputs.items():
+        # key format: "step-N" or "step-N-ko"
+        if not key.startswith("step-") or key.endswith("-ko"):
+            continue
+        try:
+            step_n = int(key.replace("step-", ""))
+        except (ValueError, TypeError):
+            continue
+        if step_n >= current_step:
+            continue  # Only past steps
+        file_path = val if isinstance(val, str) else ""
+        if file_path:
+            full_path = os.path.join(project_root, file_path)
+            if os.path.exists(full_path):
+                step_files.append((step_n, full_path))
+
+    if not step_files:
+        return []
+
+    step_files.sort(key=lambda x: x[0], reverse=True)
+
+    lines: list[str] = []
+    lines.append("■ PREVIOUS SECTION OUTPUTS (IMMORTAL — narrative coherence):")
+
+    for step_n, fpath in step_files[:5]:
+        try:
+            # H-2 Fix: Read full file for accurate word count.
+            # Previous 5KB cap caused severe undercount (e.g., 10K-word file → "800 words").
+            with open(fpath, "r", encoding="utf-8") as f:
+                full_content = f.read()
+            word_count = len(full_content.split())
+            # Heading extraction uses first 5KB only (efficiency for very large files)
+            heading_content = full_content[:5_000]
+            title = ""
+            headings: list[str] = []
+            for line in heading_content.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("## ") and not title:
+                    title = stripped[3:].strip()[:80]
+                elif stripped.startswith("## "):
+                    headings.append(stripped[3:].strip()[:60])
+            fname = os.path.basename(fpath)
+            title_str = f" — {title}" if title else ""
+            lines.append(f"  Step {step_n}: {fname}{title_str} ({word_count} words)")
+            if headings:
+                lines.append(f"    Sections: {', '.join(headings[:4])}")
+        except (IOError, OSError):
+            continue
+
+    return lines
+
+
 def _extract_thesis_gate_hitl_state(project_dir: str) -> list[str]:
     """CM-4: Extract Gate pass/fail and HITL decision history for IMMORTAL surface.
 
@@ -1306,7 +1542,7 @@ def _extract_thesis_gate_hitl_state(project_dir: str) -> list[str]:
     return lines
 
 
-def _build_recovery_output(source, latest_path, summary, sot_warning, snapshot_age, fallback_note="", project_dir=None, snapshot_content="", risk_data=None):
+def _build_recovery_output(source, latest_path, summary, sot_warning, snapshot_age, fallback_note="", project_dir=None, snapshot_content="", risk_data=None, compression_note=""):
     """Build the RLM-style recovery output for SessionStart injection."""
     age_str = _format_age(snapshot_age)
 
@@ -1716,6 +1952,23 @@ def _build_recovery_output(source, latest_path, summary, sot_warning, snapshot_a
         for line in active_step_block:
             output_lines.append(f"  {line}")
 
+    # QO-1: Recent Gate Feedback (IMMORTAL — revision guidance)
+    # Surfaces WHY a gate failed, not just that it did. Enables targeted revision.
+    gate_feedback_lines = _surface_recent_gate_feedback(project_dir) if project_dir else []
+    if gate_feedback_lines:
+        output_lines.append("")
+        for gfl in gate_feedback_lines:
+            output_lines.append(gfl)
+
+    # QO-2: Previous Section Outputs (IMMORTAL — narrative coherence)
+    # Surfaces titles, word counts, and headings of completed step outputs.
+    # Enables agents to maintain narrative continuity after compression.
+    prev_sections_lines = _surface_previous_sections_summary(project_dir) if project_dir else []
+    if prev_sections_lines:
+        output_lines.append("")
+        for psl in prev_sections_lines:
+            output_lines.append(psl)
+
     # Phase 1-C: Quality gate trend (pass/fail history from knowledge-index)
     if os.path.exists(ki_path) if has_archive else False:
         gate_trend = _get_quality_gate_trend(ki_path)
@@ -2106,6 +2359,69 @@ def _retrieve_relevant_sessions(ki_path, task_info, file_paths, max_results=3,
                         score += 12.0  # Same invocation block — strong relevance
                     elif inv_dist == 1:
                         score += 5.0   # Adjacent invocation — shared phase context
+
+            # QO-3a: Design decision type match (weight: 3.5 per match)
+            # Past sessions with similar design decisions are more relevant.
+            # A-2 Fix: Filter common verbs/prepositions that inflate false matches.
+            # _tokenize() only filters 2-char stops; decision text contains
+            # "switched", "added", "used" etc. that match unrelated tasks.
+            past_decisions = session.get("design_decisions", [])
+            if isinstance(past_decisions, list) and past_decisions and current_keywords:
+                decision_tokens = set()
+                for d in past_decisions:
+                    if isinstance(d, str):
+                        raw = _tokenize(d)
+                        decision_tokens |= {
+                            t for t in raw
+                            if t not in _DECISION_EXTRA_STOP_WORDS
+                        }
+                decision_overlap = current_keywords & decision_tokens
+                score += min(len(decision_overlap) * 3.5, 14.0)  # Capped at 14.0
+
+            # QO-3b: Tool sequence pattern match (weight: 2.5 per pattern hit)
+            # Sessions with similar tool sequences represent similar work patterns.
+            # A-1 Fix: Use regex to extract tool names cleanly from RLE format
+            # (e.g., "Edit(3)→Bash(2)" → {"Edit", "Bash"}).
+            past_tool_seq = session.get("tool_sequence", "")
+            if isinstance(past_tool_seq, str) and past_tool_seq:
+                past_tools = set(re.findall(r"([A-Z][a-zA-Z]+)", past_tool_seq))
+                has_edit_bash = "Edit" in past_tools and "Bash" in past_tools
+                has_agent = "Agent" in past_tools
+                if has_edit_bash:
+                    score += 2.5  # Code modification + validation pattern
+                if has_agent:
+                    score += 1.5  # Agent delegation pattern
+
+            # QO-3c: Phase alignment (weight: 2.0 for exact match, 1.0 for related)
+            # Sessions in the same workflow phase share context constraints.
+            past_phase = session.get("phase", "")
+            past_session_type = session.get("session_type", "")
+            if past_phase or past_session_type:
+                # Phase flow alignment — same phase means similar work context
+                past_phase_flow = session.get("phase_flow", past_phase)
+                if isinstance(past_phase_flow, str) and past_phase_flow:
+                    past_phase_tokens = set(past_phase_flow.lower().replace("→", " ").split())
+                    # Use current task keywords as proxy for current phase
+                    phase_keywords = {"implementation", "research", "writing", "debugging",
+                                      "audit", "refactoring", "translation", "exploration"}
+                    cur_phase_kw = current_keywords & phase_keywords
+                    past_phase_kw = past_phase_tokens & phase_keywords
+                    if cur_phase_kw and cur_phase_kw & past_phase_kw:
+                        score += 2.0  # Same phase type
+
+            # QO-3d: Success pattern applicability (weight: 3.0 per applicable pattern)
+            # Past sessions with proven success patterns for similar file types.
+            past_success = session.get("success_patterns", [])
+            if isinstance(past_success, list) and past_success and current_file_basenames:
+                for sp in past_success:
+                    if not isinstance(sp, dict):
+                        continue
+                    sp_files = sp.get("files", [])
+                    if isinstance(sp_files, list):
+                        sp_basenames = {os.path.basename(f) for f in sp_files if f}
+                        if sp_basenames & current_file_basenames:
+                            score += 3.0  # Same files → pattern directly applicable
+                            break  # One match is enough
 
             # 6. Temporal decay — recent sessions are more likely relevant
             # Max boost: +3.0 at age=0, linear decay to 0 at 30 days

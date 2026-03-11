@@ -203,6 +203,12 @@ Phase 4: 출판 전략
 # → 마지막 완료 step에서 자동 재개
 ```
 
+복원 시 Context Memory Quality Optimization (QO-1~5)이 자동으로 작동합니다:
+- **QO-1**: 최근 Gate FAIL/WARN 사유가 IMMORTAL 섹션에 표면화 → 가이드된 수정
+- **QO-2**: 지난 5개 step의 제목·워드카운트·섹션 구조 → 서사적 일관성 유지
+- **QO-3**: 11개 scoring signal로 가장 관련 높은 과거 세션 3개 자동 검색
+- **QO-4**: 다음 step의 output_path, min_bytes, tier, pCCS 모드 메타데이터 표면화
+
 ---
 
 ## 6. CLI 직접 사용
@@ -275,6 +281,11 @@ python .claude/hooks/scripts/query_step.py \
   --consolidated-prompt --step 39 --topic "AI in Education" \
   --checklist thesis-output/my-thesis/todo-checklist.md --json
 
+# 단일 Step 프롬프트 생성 (P1 결정론적 — H-8)
+python .claude/hooks/scripts/query_step.py \
+  --single-prompt --step 55 --topic "AI in Education" \
+  --context "Gate 1 evaluation" --json
+
 # 다음 실행 step 결정 (mid-consolidation restart 자동 감지)
 python .claude/hooks/scripts/query_step.py \
   --next-step --project-dir thesis-output/my-thesis --json
@@ -302,7 +313,7 @@ python .claude/hooks/scripts/run_pccs_pipeline.py \
   --step-output thesis-output/my-thesis/wave-results/wave-1/literature-search.md \
   --project-dir thesis-output/my-thesis --step 40
 
-# Step 산출물 검증 (VO-1~VO-5 — Hallucination Containment)
+# Step 산출물 검증 (VO-1~VO-7 — Hallucination Containment)
 python .claude/hooks/scripts/verify_step_output.py \
   --step 42 --project-dir thesis-output/my-thesis
 

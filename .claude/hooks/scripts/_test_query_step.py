@@ -10,6 +10,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from query_step import (
+    _WRITING_STANDARD_SUFFIX,
     _compact_ranges,
     _get_critic_config,
     _get_gate_context,
@@ -17,6 +18,7 @@ from query_step import (
     _get_phase,
     _get_wave,
     generate_consolidated_prompt,
+    generate_single_step_prompt,
     get_invocation_plan,
     get_next_execution_step,
     list_agents,
@@ -730,6 +732,105 @@ class TestGenerateConsolidatedPrompt(unittest.TestCase):
     def test_wave4_group(self):
         result = generate_consolidated_prompt(99, 102, "test topic")
         self.assertEqual(result["agent"], "synthesis-agent")
+
+    def test_prompt_contains_writing_standard(self):
+        """H-8: Consolidated prompt must include doctoral writing standard."""
+        result = generate_consolidated_prompt(39, 42, "test topic")
+        prompt = result["prompt"]
+        self.assertIn("WRITING STANDARD", prompt)
+        self.assertIn("Clarity", prompt)
+        self.assertIn("Conciseness", prompt)
+        self.assertIn("Academic Rigor", prompt)
+        self.assertIn("Logical Flow", prompt)
+
+
+# =============================================================================
+# F-3: Tests for generate_single_step_prompt()
+# =============================================================================
+
+class TestGenerateSingleStepPrompt(unittest.TestCase):
+    """Tests for generate_single_step_prompt() — P1 single-step prompt (H-8)."""
+
+    def test_returns_dict_with_required_keys(self):
+        result = generate_single_step_prompt(143, "AI safety in LLMs")
+        self.assertIsInstance(result, dict)
+        self.assertIn("prompt", result)
+        self.assertIn("agent", result)
+        self.assertIn("output_file", result)
+        self.assertIn("min_output_bytes", result)
+        self.assertIn("step", result)
+
+    def test_prompt_contains_step_and_topic(self):
+        topic = "Impact of AI on education"
+        result = generate_single_step_prompt(143, topic)
+        self.assertIn("step 143", result["prompt"].lower())
+        self.assertIn(topic, result["prompt"])
+
+    def test_prompt_contains_writing_standard(self):
+        """H-8: Single-step prompt MUST include doctoral writing standard."""
+        result = generate_single_step_prompt(143, "test topic")
+        prompt = result["prompt"]
+        self.assertIn("WRITING STANDARD", prompt)
+        self.assertIn("Clarity", prompt)
+        self.assertIn("Conciseness", prompt)
+        self.assertIn("Academic Rigor", prompt)
+        self.assertIn("Logical Flow", prompt)
+
+    def test_prompt_contains_output_path(self):
+        result = generate_single_step_prompt(143, "test topic")
+        self.assertIn("Output to:", result["prompt"])
+
+    def test_agent_matches_registry(self):
+        result = generate_single_step_prompt(143, "test topic")
+        self.assertEqual(result["agent"], "thesis-writer")
+
+    def test_context_included_when_provided(self):
+        ctx = "Reference wave-results/ for this chapter"
+        result = generate_single_step_prompt(143, "test topic", context=ctx)
+        self.assertIn(ctx, result["prompt"])
+
+    def test_context_absent_when_empty(self):
+        result = generate_single_step_prompt(143, "test topic", context="")
+        self.assertNotIn("Context:", result["prompt"])
+
+    def test_zero_unfilled_template_variables(self):
+        """H-8: No {placeholder} in output — same guarantee as consolidated."""
+        result = generate_single_step_prompt(143, "test topic")
+        prompt = result["prompt"]
+        import re
+        placeholders = re.findall(r'\{[a-z_]+\}', prompt)
+        self.assertEqual(placeholders, [], f"Found unfilled templates: {placeholders}")
+
+    def test_step_out_of_range_low_raises(self):
+        with self.assertRaises(ValueError):
+            generate_single_step_prompt(0, "test")
+
+    def test_step_out_of_range_high_raises(self):
+        with self.assertRaises(ValueError):
+            generate_single_step_prompt(212, "test")
+
+    def test_consolidated_group_step_raises(self):
+        """Must reject steps that are part of a multi-step group."""
+        with self.assertRaises(ValueError) as ctx:
+            generate_single_step_prompt(39, "test")  # Part of [39,40,41,42]
+        self.assertIn("consolidation group", str(ctx.exception))
+
+    def test_grounded_claims_for_tier_a(self):
+        """Tier A steps should include GroundedClaim instruction."""
+        # Step 143 (thesis-writer) has has_grounded_claims=True
+        result = generate_single_step_prompt(143, "test topic")
+        self.assertIn("GroundedClaim", result["prompt"])
+
+    def test_min_output_bytes_for_phase3(self):
+        """Phase 3 chapter steps should have min_output_bytes > 0."""
+        result = generate_single_step_prompt(143, "test topic")
+        self.assertGreater(result["min_output_bytes"], 0)
+
+    def test_writing_standard_suffix_is_constant(self):
+        """Verify _WRITING_STANDARD_SUFFIX is non-empty and contains key phrases."""
+        self.assertGreater(len(_WRITING_STANDARD_SUFFIX), 100)
+        self.assertIn("WRITING STANDARD", _WRITING_STANDARD_SUFFIX)
+        self.assertIn("doctoral-writing", _WRITING_STANDARD_SUFFIX)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Tests for verify_step_output.py — P1 Step Output Verification.
 
-Tests the 5 verification checks:
+Tests the 7 verification checks:
     VO-1: File exists + min size
     VO-2: UTF-8 validity
     VO-3: Placeholder detection
     VO-4: GroundedClaim presence (Tier A)
     VO-5: Claim prefix match
+    VO-6: Banned academic expressions (WARNING)
+    VO-7: Heading structure for large files
 """
 
 import json
@@ -21,8 +23,10 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from verify_step_output import (
+    _detect_banned_expressions,
     _detect_placeholders,
     _extract_prefix,
+    _has_heading_structure,
     _resolve_output_file,
     verify_step_output,
 )
@@ -280,6 +284,178 @@ class TestVerifyStepOutput(unittest.TestCase):
             self.assertTrue(result["valid"])
             self.assertTrue(result["checks"]["VO4_has_claims"].startswith("SKIP"))
             self.assertTrue(result["checks"]["VO5_prefix_match"].startswith("SKIP"))
+
+
+class TestDetectBannedExpressions(unittest.TestCase):
+    """Test banned academic expression detection (VO-6)."""
+
+    def test_it_is_important_to_note(self):
+        result = _detect_banned_expressions("It is important to note that the results were significant.")
+        self.assertTrue(len(result) > 0)
+
+    def test_in_order_to(self):
+        result = _detect_banned_expressions("In order to understand the phenomenon, we conducted interviews.")
+        self.assertTrue(len(result) > 0)
+
+    def test_due_to_the_fact_that(self):
+        result = _detect_banned_expressions("Due to the fact that the sample size was small, we limited our scope.")
+        self.assertTrue(len(result) > 0)
+
+    def test_clean_academic_text(self):
+        result = _detect_banned_expressions(
+            "The results indicate a significant correlation between variables. "
+            "Smith (2020) demonstrated that AI safety requires rigorous testing. "
+            "These findings align with previous research."
+        )
+        self.assertEqual(len(result), 0)
+
+    def test_multiple_banned_expressions(self):
+        result = _detect_banned_expressions(
+            "It is important to note that in order to achieve results, "
+            "due to the fact that the methodology was sound."
+        )
+        self.assertGreaterEqual(len(result), 2)
+
+    def test_last_but_not_least(self):
+        result = _detect_banned_expressions("Last but not least, we discuss limitations.")
+        self.assertTrue(len(result) > 0)
+
+
+class TestHasHeadingStructure(unittest.TestCase):
+    """Test heading structure detection (VO-7)."""
+
+    def test_has_h2_heading(self):
+        self.assertTrue(_has_heading_structure("# Title\n\n## Section 1\n\nContent here."))
+
+    def test_has_h3_heading(self):
+        self.assertTrue(_has_heading_structure("### Subsection\n\nContent here."))
+
+    def test_no_heading(self):
+        self.assertFalse(_has_heading_structure("Just plain text without any headings.\nMore text here."))
+
+    def test_h1_only_no_h2(self):
+        """H1 alone doesn't count — we require ## or deeper."""
+        self.assertFalse(_has_heading_structure("# Title\n\nContent without subsections."))
+
+    def test_heading_must_have_space(self):
+        """## must be followed by space and text."""
+        self.assertFalse(_has_heading_structure("##NoSpace\n\nContent."))
+
+
+class TestVO6Integration(unittest.TestCase):
+    """Integration tests for VO-6 banned expressions in verify_step_output."""
+
+    @patch("verify_step_output._get_query_step")
+    def test_banned_expr_produces_warning(self, mock_qs):
+        mock_module = type("MockQS", (), {
+            "query_step": staticmethod(lambda step, rt: {
+                "step": step, "agent": "literature-searcher",
+                "output_path": f"wave-results/wave-1/step-{step:03d}-*.md",
+                "min_output_bytes": 50, "has_grounded_claims": False,
+            })
+        })()
+        mock_qs.return_value = mock_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wave_dir = os.path.join(tmpdir, "wave-results", "wave-1")
+            os.makedirs(wave_dir)
+            fpath = os.path.join(wave_dir, "step-042-output.md")
+            Path(fpath).write_text(
+                "## Analysis\n\nIt is important to note that the results were significant.\n"
+                "The data confirms our hypothesis.\n",
+                encoding="utf-8"
+            )
+            result = verify_step_output(42, tmpdir)
+            # VO-6 is WARNING, not FAIL — should not block
+            self.assertTrue(result["valid"])
+            self.assertEqual(result["checks"]["VO6_no_banned_expr"], "WARN")
+            self.assertTrue(any("VO-6" in w for w in result["warnings"]))
+
+    @patch("verify_step_output._get_query_step")
+    def test_orchestrator_agent_skips_vo6(self, mock_qs):
+        mock_module = type("MockQS", (), {
+            "query_step": staticmethod(lambda step, rt: {
+                "step": step, "agent": "_orchestrator",
+                "output_path": f"step-{step:03d}-*.md",
+                "min_output_bytes": 50, "has_grounded_claims": False,
+            })
+        })()
+        mock_qs.return_value = mock_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fpath = os.path.join(tmpdir, "step-035-output.md")
+            Path(fpath).write_text(
+                "## Gate Result\n\nIt is important to note that gate passed.\n",
+                encoding="utf-8"
+            )
+            result = verify_step_output(35, tmpdir)
+            self.assertTrue(result["checks"]["VO6_no_banned_expr"].startswith("SKIP"))
+
+
+class TestVO7Integration(unittest.TestCase):
+    """Integration tests for VO-7 heading structure in verify_step_output."""
+
+    @patch("verify_step_output._get_query_step")
+    def test_large_file_no_heading_fails(self, mock_qs):
+        mock_module = type("MockQS", (), {
+            "query_step": staticmethod(lambda step, rt: {
+                "step": step, "agent": "literature-searcher",
+                "output_path": f"wave-results/wave-1/step-{step:03d}-*.md",
+                "min_output_bytes": 50, "has_grounded_claims": False,
+            })
+        })()
+        mock_qs.return_value = mock_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wave_dir = os.path.join(tmpdir, "wave-results", "wave-1")
+            os.makedirs(wave_dir)
+            fpath = os.path.join(wave_dir, "step-042-output.md")
+            # Write >2000 bytes without any heading
+            Path(fpath).write_text("A " * 1500, encoding="utf-8")
+            result = verify_step_output(42, tmpdir)
+            self.assertFalse(result["valid"])
+            self.assertEqual(result["checks"]["VO7_heading_structure"], "FAIL")
+
+    @patch("verify_step_output._get_query_step")
+    def test_large_file_with_heading_passes(self, mock_qs):
+        mock_module = type("MockQS", (), {
+            "query_step": staticmethod(lambda step, rt: {
+                "step": step, "agent": "literature-searcher",
+                "output_path": f"wave-results/wave-1/step-{step:03d}-*.md",
+                "min_output_bytes": 50, "has_grounded_claims": False,
+            })
+        })()
+        mock_qs.return_value = mock_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wave_dir = os.path.join(tmpdir, "wave-results", "wave-1")
+            os.makedirs(wave_dir)
+            fpath = os.path.join(wave_dir, "step-042-output.md")
+            Path(fpath).write_text(
+                "## Literature Analysis\n\n" + "Content paragraph. " * 300,
+                encoding="utf-8"
+            )
+            result = verify_step_output(42, tmpdir)
+            self.assertEqual(result["checks"]["VO7_heading_structure"], "PASS")
+
+    @patch("verify_step_output._get_query_step")
+    def test_small_file_skips_vo7(self, mock_qs):
+        mock_module = type("MockQS", (), {
+            "query_step": staticmethod(lambda step, rt: {
+                "step": step, "agent": "literature-searcher",
+                "output_path": f"wave-results/wave-1/step-{step:03d}-*.md",
+                "min_output_bytes": 50, "has_grounded_claims": False,
+            })
+        })()
+        mock_qs.return_value = mock_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wave_dir = os.path.join(tmpdir, "wave-results", "wave-1")
+            os.makedirs(wave_dir)
+            fpath = os.path.join(wave_dir, "step-042-output.md")
+            Path(fpath).write_text("Short content here.", encoding="utf-8")
+            result = verify_step_output(42, tmpdir)
+            self.assertTrue(result["checks"]["VO7_heading_structure"].startswith("SKIP"))
 
 
 class TestRealModuleIntegration(unittest.TestCase):

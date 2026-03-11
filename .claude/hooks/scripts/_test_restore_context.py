@@ -578,5 +578,372 @@ class TestGetTodayYesterdaySummary(unittest.TestCase):
         self.assertEqual(result, [])
 
 
+class TestSurfaceRecentGateFeedback(unittest.TestCase):
+    """Test QO-1: Gate feedback surfacing for IMMORTAL section."""
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self._setup_thesis_project()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _setup_thesis_project(self, sot_data=None):
+        """Create minimal thesis project structure."""
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        sot = sot_data or {"current_step": 10, "status": "in_progress"}
+        (proj_dir / "session.json").write_text(
+            json.dumps(sot), encoding="utf-8"
+        )
+        return proj_dir
+
+    def test_no_project_dir_returns_empty(self):
+        result = rc._surface_recent_gate_feedback("")
+        self.assertEqual(result, [])
+
+    def test_no_gate_dir_returns_empty(self):
+        result = rc._surface_recent_gate_feedback(str(self.tmpdir))
+        self.assertEqual(result, [])
+
+    def test_extracts_fail_items_from_md(self):
+        """MD gate report: items must be in structured Errors:/Warnings: sections."""
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        gate_dir = proj_dir / "gate-reports"
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        (gate_dir / "gate-1.md").write_text(
+            "Gate: gate-1 — Cross-Validation\n"
+            "Status: FAIL\n"
+            "Files: 5\n"
+            "Total claims: 20\n\n"
+            "Errors:\n"
+            "  - Missing literature coverage in Wave 1\n"
+            "  - Insufficient citations in Step 3\n\n"
+            "Warnings:\n"
+            "  - Low sample size in methodology\n",
+            encoding="utf-8",
+        )
+        result = rc._surface_recent_gate_feedback(str(self.tmpdir))
+        self.assertTrue(any("RECENT GATE FEEDBACK" in l for l in result))
+        self.assertTrue(any("Failures (2)" in l for l in result))
+        self.assertTrue(any("Warnings (1)" in l for l in result))
+        self.assertTrue(any("FAIL" in l for l in result))
+
+    def test_extracts_fail_items_from_json(self):
+        """JSON gate report: parsed from structured fields directly."""
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        gate_dir = proj_dir / "gate-reports"
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        (gate_dir / "gate-1.json").write_text(
+            json.dumps({
+                "gate": "gate-1",
+                "status": "fail",
+                "errors": ["L0 fail: step-3.md (100 bytes < 500)"],
+                "warnings": ["Inconsistency: step-5 claim prefix"],
+            }),
+            encoding="utf-8",
+        )
+        result = rc._surface_recent_gate_feedback(str(self.tmpdir))
+        self.assertTrue(any("RECENT GATE FEEDBACK" in l for l in result))
+        self.assertTrue(any("Failures (1)" in l for l in result))
+        self.assertTrue(any("L0 fail" in l for l in result))
+
+    def test_no_false_positives_on_descriptive_text(self):
+        """H-1: Descriptive text mentioning 'FAIL' should NOT be counted as failures."""
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        gate_dir = proj_dir / "gate-reports"
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        (gate_dir / "gate-1.md").write_text(
+            "Gate: gate-1 — Cross-Validation\n"
+            "Status: PASS\n"
+            "Files: 5\n\n"
+            "No FAILURES were detected in this validation run.\n"
+            "This is a FAILSAFE mechanism that ensures quality.\n"
+            "The test did not FAIL under any condition.\n",
+            encoding="utf-8",
+        )
+        result = rc._surface_recent_gate_feedback(str(self.tmpdir))
+        # Should NOT report any failures — these are descriptive text, not structured items
+        self.assertFalse(any("Failures" in l for l in result))
+        self.assertTrue(any("All checks passed" in l for l in result))
+
+    def test_all_passed_gate(self):
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        gate_dir = proj_dir / "gate-reports"
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        (gate_dir / "gate-1.md").write_text(
+            "Gate: gate-1 — Cross-Validation\n"
+            "Status: PASS\n"
+            "Files: 5\n"
+            "Total claims: 20\n",
+            encoding="utf-8",
+        )
+        result = rc._surface_recent_gate_feedback(str(self.tmpdir))
+        self.assertTrue(any("All checks passed" in l for l in result))
+
+    def test_empty_gate_file_returns_empty(self):
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        gate_dir = proj_dir / "gate-reports"
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        (gate_dir / "gate-1.md").write_text("", encoding="utf-8")
+        result = rc._surface_recent_gate_feedback(str(self.tmpdir))
+        self.assertEqual(result, [])
+
+
+class TestSurfacePreviousSectionsSummary(unittest.TestCase):
+    """Test QO-2: Previous section output surfacing for IMMORTAL section."""
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _setup_project(self, current_step=10, outputs=None):
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        sot = {"current_step": current_step, "status": "in_progress"}
+        if outputs:
+            sot["outputs"] = outputs
+        (proj_dir / "session.json").write_text(
+            json.dumps(sot), encoding="utf-8"
+        )
+        return proj_dir
+
+    def test_no_project_dir_returns_empty(self):
+        result = rc._surface_previous_sections_summary("")
+        self.assertEqual(result, [])
+
+    def test_no_outputs_returns_empty(self):
+        self._setup_project(current_step=5, outputs={})
+        result = rc._surface_previous_sections_summary(str(self.tmpdir))
+        self.assertEqual(result, [])
+
+    def test_step_1_returns_empty(self):
+        """Step 1 has no previous steps."""
+        self._setup_project(current_step=1, outputs={})
+        result = rc._surface_previous_sections_summary(str(self.tmpdir))
+        self.assertEqual(result, [])
+
+    def test_extracts_title_and_word_count(self):
+        proj_dir = self._setup_project(
+            current_step=5,
+            outputs={"step-3": "wave-results/step-3.md"},
+        )
+        output_dir = proj_dir / "wave-results"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "step-3.md").write_text(
+            "## Literature Review\n\n"
+            "This is a sample section with some words.\n"
+            "## Methodology\n\nMore content here.\n",
+            encoding="utf-8",
+        )
+        result = rc._surface_previous_sections_summary(str(self.tmpdir))
+        self.assertTrue(any("PREVIOUS SECTION OUTPUTS" in l for l in result))
+        self.assertTrue(any("Step 3" in l for l in result))
+        self.assertTrue(any("Literature Review" in l for l in result))
+        self.assertTrue(any("words" in l for l in result))
+
+    def test_word_count_accurate_for_large_files(self):
+        """H-2: Word count must reflect entire file, not just first 5KB."""
+        proj_dir = self._setup_project(
+            current_step=5,
+            outputs={"step-3": "wave-results/step-3.md"},
+        )
+        output_dir = proj_dir / "wave-results"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        # Create a file larger than 5KB (~1000 words per KB for English)
+        large_content = "## Introduction\n\n" + ("word " * 10_000)  # 10K words >> 5KB
+        (output_dir / "step-3.md").write_text(large_content, encoding="utf-8")
+        result = rc._surface_previous_sections_summary(str(self.tmpdir))
+        # Extract the word count from the result line
+        step_line = next((l for l in result if "Step 3" in l), "")
+        # Should show ~10002 words (10000 + "Introduction" + "##"), NOT ~800
+        import re as test_re
+        m = test_re.search(r"\((\d+) words\)", step_line)
+        self.assertIsNotNone(m, f"No word count found in: {step_line}")
+        reported_count = int(m.group(1))
+        self.assertGreater(reported_count, 5000,
+                           f"Word count {reported_count} appears truncated (expected >5000)")
+
+    def test_skips_ko_outputs(self):
+        """Korean translation outputs should be skipped."""
+        proj_dir = self._setup_project(
+            current_step=5,
+            outputs={
+                "step-3": "wave-results/step-3.md",
+                "step-3-ko": "wave-results/step-3-ko.md",
+            },
+        )
+        output_dir = proj_dir / "wave-results"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "step-3.md").write_text(
+            "## English Content\nWords here.\n", encoding="utf-8"
+        )
+        (output_dir / "step-3-ko.md").write_text(
+            "## 한국어 콘텐츠\n여기에 단어들.\n", encoding="utf-8"
+        )
+        result = rc._surface_previous_sections_summary(str(self.tmpdir))
+        # Only step-3 should appear, not step-3-ko
+        step_lines = [l for l in result if "Step" in l]
+        self.assertEqual(len(step_lines), 1)
+
+    def test_skips_future_steps(self):
+        """Steps >= current_step should be excluded."""
+        proj_dir = self._setup_project(
+            current_step=5,
+            outputs={
+                "step-3": "wave-results/step-3.md",
+                "step-5": "wave-results/step-5.md",
+                "step-7": "wave-results/step-7.md",
+            },
+        )
+        output_dir = proj_dir / "wave-results"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for n in [3, 5, 7]:
+            (output_dir / f"step-{n}.md").write_text(
+                f"## Step {n} Content\nWords.\n", encoding="utf-8"
+            )
+        result = rc._surface_previous_sections_summary(str(self.tmpdir))
+        # Only step-3 should appear (step-5 and step-7 are >= current_step=5)
+        step_lines = [l for l in result if "Step" in l]
+        self.assertEqual(len(step_lines), 1)
+        self.assertTrue(any("Step 3" in l for l in step_lines))
+
+
+class TestQO3ScoringSignals(unittest.TestCase):
+    """Test QO-3: Enhanced scoring signals in _retrieve_relevant_sessions."""
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.ki_path = str(self.tmpdir / "knowledge-index.jsonl")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _write_ki(self, entries):
+        with open(self.ki_path, "w", encoding="utf-8") as f:
+            for entry in entries:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    def test_design_decision_match_boosts_score(self):
+        """QO-3a: Sessions with matching design decision tokens should rank higher."""
+        self._write_ki([
+            {"session_id": "with_decisions", "user_task": "P1 validation gate work",
+             "modified_files": [], "tags": [],
+             "design_decisions": ["Switched to P1 deterministic validation for gate reports"]},
+            {"session_id": "no_decisions", "user_task": "P1 validation gate work",
+             "modified_files": [], "tags": [],
+             "design_decisions": []},
+        ])
+        result = rc._retrieve_relevant_sessions(self.ki_path, "P1 validation gate", [])
+        self.assertTrue(len(result) >= 2)
+        self.assertEqual(result[0][1]["session_id"], "with_decisions")
+
+    def test_tool_sequence_match_boosts_score(self):
+        """QO-3b: Sessions with Edit+Bash tool patterns should score higher."""
+        self._write_ki([
+            {"session_id": "edit_bash", "user_task": "fix hook bug",
+             "modified_files": [], "tags": [],
+             "tool_sequence": "Edit(3)→Bash(2)→Edit(1)"},
+            {"session_id": "read_only", "user_task": "fix hook bug",
+             "modified_files": [], "tags": [],
+             "tool_sequence": "Read(5)"},
+        ])
+        result = rc._retrieve_relevant_sessions(self.ki_path, "fix hook bug", [])
+        self.assertTrue(len(result) >= 2)
+        self.assertEqual(result[0][1]["session_id"], "edit_bash")
+
+    def test_phase_alignment_boosts_score(self):
+        """QO-3c: Sessions with matching phase keywords should score higher."""
+        self._write_ki([
+            {"session_id": "impl_phase", "user_task": "hook implementation work",
+             "modified_files": [], "tags": [],
+             "phase": "implementation", "phase_flow": "implementation→testing"},
+            {"session_id": "research_phase", "user_task": "hook implementation work",
+             "modified_files": [], "tags": [],
+             "phase": "research", "phase_flow": "research→exploration"},
+        ])
+        result = rc._retrieve_relevant_sessions(self.ki_path, "implementation of hook work", [])
+        self.assertTrue(len(result) >= 2)
+        self.assertEqual(result[0][1]["session_id"], "impl_phase")
+
+    def test_success_pattern_boosts_score(self):
+        """QO-3d: Sessions with matching success pattern files should rank higher."""
+        self._write_ki([
+            {"session_id": "with_success", "user_task": "work on context",
+             "modified_files": [], "tags": [],
+             "success_patterns": [{"files": ["/path/restore_context.py"]}]},
+            {"session_id": "no_success", "user_task": "work on context",
+             "modified_files": [], "tags": [],
+             "success_patterns": []},
+        ])
+        result = rc._retrieve_relevant_sessions(
+            self.ki_path, "work on context", ["/path/restore_context.py"]
+        )
+        self.assertTrue(len(result) >= 2)
+        self.assertEqual(result[0][1]["session_id"], "with_success")
+
+
+class TestQO4StepMetadata(unittest.TestCase):
+    """Test QO-4: Step metadata surfacing in active thesis block."""
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_build_active_thesis_step_block_includes_metadata(self):
+        """QO-4: Active thesis block should include step metadata when available."""
+        # Create minimal thesis project
+        proj_dir = self.tmpdir / "thesis-output" / "test-project"
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        sot = {
+            "current_step": 5,
+            "status": "in_progress",
+            "research_type": "quantitative",
+            "consolidated_groups": {
+                "group_1": {"steps": [5, 6, 7], "status": "in_progress"}
+            },
+        }
+        (proj_dir / "session.json").write_text(
+            json.dumps(sot), encoding="utf-8"
+        )
+        # Build active thesis step block
+        lines = rc._build_active_thesis_step_block(str(self.tmpdir))
+        # Should mention current step
+        combined = "\n".join(lines)
+        self.assertIn("5", combined)
+
+
+class TestBuildRecoveryOutputCompressionNote(unittest.TestCase):
+    """Test that compression_note parameter is properly handled."""
+
+    def test_compression_note_appears_in_output(self):
+        """When compression_note is provided, it should appear in the output."""
+        output = rc._build_recovery_output(
+            source="compact",
+            latest_path="/tmp/fake/snapshot.md",
+            summary=[("현재 작업", "test task")],
+            sot_warning=None,
+            snapshot_age=30,
+            compression_note="⚠️ Snapshot was heavily compressed (80% reduction)",
+        )
+        self.assertIn("heavily compressed", output)
+
+    def test_empty_compression_note_omitted(self):
+        """When compression_note is empty, no extra lines should appear."""
+        output = rc._build_recovery_output(
+            source="compact",
+            latest_path="/tmp/fake/snapshot.md",
+            summary=[("현재 작업", "test task")],
+            sot_warning=None,
+            snapshot_age=30,
+            compression_note="",
+        )
+        self.assertNotIn("compressed", output)
+
+
 if __name__ == "__main__":
     unittest.main()

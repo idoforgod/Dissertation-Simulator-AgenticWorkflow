@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Step Execution Registry — deterministic step→execution parameters mapping.
 
-Eliminates Orchestrator hallucination at 7 critical decision points:
+Eliminates Orchestrator hallucination at 8 critical decision points:
   H-1: Step→Agent mapping (which agent executes this step?)
   H-2: pCCS mode selection (FULL or DEGRADED?)
   H-3: Critic agent routing (which critic reviews this step?)
@@ -9,6 +9,7 @@ Eliminates Orchestrator hallucination at 7 critical decision points:
   H-5: Step consolidation (which steps execute together as one call?)
   H-6: Output size enforcement (minimum output bytes per step type)
   H-7: Invocation planning (how many Orchestrator calls needed?)
+  H-8: Writing standard injection (doctoral-level academic writing in ALL prompts)
 
 The Orchestrator calls this script INSTEAD of interpreting prose rules.
 All outputs are deterministic — no LLM interpretation needed.
@@ -20,6 +21,8 @@ Usage:
   python3 query_step.py --list-agents
   python3 query_step.py --list-steps --agent literature-searcher
   python3 query_step.py --invocation-plan [--project-dir <dir>] [--json]
+  python3 query_step.py --single-prompt --step 143 --topic "AI safety" --json
+  python3 query_step.py --single-prompt --step 143 --topic "AI safety" --context "Reference wave-results/" --json
 
 P1 Compliance: Pure stdlib, no LLM, deterministic, exit 0 always.
 """
@@ -802,6 +805,29 @@ def query_step(step: int, research_type: str = "undecided") -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Writing Standard — doctoral-level academic writing injection (H-8)
+# ---------------------------------------------------------------------------
+
+_WRITING_STANDARD_SUFFIX: str = (
+    "\n\n  WRITING STANDARD (doctoral-level academic writing — MANDATORY):\n"
+    "  All output must follow the doctoral-writing skill "
+    "(.claude/skills/doctoral-writing/SKILL.md).\n"
+    "  Apply these 4 principles rigorously:\n"
+    "  (1) Clarity — precise terminology, logical paragraph structure, "
+    "no ambiguous references;\n"
+    "  (2) Conciseness — no filler phrases, every sentence advances the argument, "
+    "eliminate redundancy;\n"
+    "  (3) Academic Rigor — proper citations, evidence-based claims, "
+    "appropriate hedging;\n"
+    "  (4) Logical Flow — coherent transitions between paragraphs and sections, "
+    "hierarchical organization.\n"
+    "  Avoid banned expressions: 'it is important to note that', "
+    "'it goes without saying', 'in order to', 'due to the fact that'.\n"
+    "  Read .claude/skills/doctoral-writing/SKILL.md for the complete framework."
+)
+
+
 def generate_consolidated_prompt(
     first_step: int,
     last_step: int,
@@ -909,6 +935,7 @@ def generate_consolidated_prompt(
         f"  Write as a SINGLE comprehensive document with clear per-step structure.\n"
         f"  Use GroundedClaim schema for all claims.\n"
         f"  Minimum output size: {min_bytes} bytes."
+        f"{_WRITING_STANDARD_SUFFIX}"
     )
 
     return {
@@ -918,6 +945,87 @@ def generate_consolidated_prompt(
         "min_output_bytes": min_bytes,
         "first_step": first_step,
         "last_step": last_step,
+    }
+
+
+def generate_single_step_prompt(
+    step: int,
+    research_topic: str,
+    research_type: str = "undecided",
+    context: str = "",
+) -> dict[str, Any]:
+    """P1 deterministic: generate a fully rendered single-step prompt.
+
+    Eliminates LLM hallucination risk for single-step execution (H-8)
+    by pre-computing ALL template variables, identical to how
+    generate_consolidated_prompt() handles multi-step groups.
+
+    Args:
+        step: Step number (1-211)
+        research_topic: The research question/topic string
+        research_type: "quantitative"/"qualitative"/"mixed"/"undecided"
+        context: Optional additional context (e.g., chapter-specific instructions)
+
+    Returns:
+        dict with:
+        - prompt: str (fully rendered, zero unfilled template variables)
+        - agent: str (sub-agent to invoke)
+        - output_file: str (output filename pattern)
+        - min_output_bytes: int
+
+    Raises:
+        ValueError: If step is invalid or is part of a multi-step consolidation group.
+    """
+    if step < 1 or step > 211:
+        raise ValueError(f"Step {step} out of bounds [1, 211]")
+
+    info = query_step(step, research_type)
+
+    if "error" in info:
+        raise ValueError(f"Invalid step {step}: {info['error']}")
+
+    # Reject multi-step consolidation groups — use generate_consolidated_prompt() instead
+    cw = info.get("consolidate_with", [step])
+    if len(cw) > 1:
+        raise ValueError(
+            f"Step {step} is part of a multi-step consolidation group "
+            f"({min(cw)}-{max(cw)}). Use generate_consolidated_prompt() instead."
+        )
+
+    agent = info["agent"]
+    description = info["description"]
+    output_path = info["output_path"]
+    min_bytes = info.get("min_output_bytes", 0)
+    has_claims = info.get("has_grounded_claims", False)
+
+    # Build the prompt deterministically
+    parts: list[str] = [
+        f"Execute step {step}: {description}.\n",
+        f"  Research topic: {research_topic}\n",
+        f"  Output to: {output_path}\n",
+    ]
+
+    if context:
+        parts.append(f"\n  Context: {context}\n")
+
+    if has_claims:
+        parts.append(f"  Use GroundedClaim schema for all claims.\n")
+        parts.append(f"  Claims must include trace markers: [trace:step-{step}].\n")
+
+    if min_bytes > 0:
+        parts.append(f"  Minimum output size: {min_bytes} bytes.\n")
+
+    # Append doctoral-level writing standard (H-8)
+    parts.append(_WRITING_STANDARD_SUFFIX)
+
+    prompt = "".join(parts)
+
+    return {
+        "prompt": prompt,
+        "agent": agent,
+        "output_file": output_path,
+        "min_output_bytes": min_bytes,
+        "step": step,
     }
 
 
@@ -1041,7 +1149,10 @@ def main() -> int:
                         help="Compute next execution step (handles consolidation restart)")
     parser.add_argument("--consolidated-prompt", action="store_true",
                         help="Generate fully rendered consolidated prompt (requires --step)")
-    parser.add_argument("--topic", help="Research topic for --consolidated-prompt")
+    parser.add_argument("--single-prompt", action="store_true",
+                        help="Generate fully rendered single-step prompt (requires --step)")
+    parser.add_argument("--topic", help="Research topic for prompt generation")
+    parser.add_argument("--context", help="Additional context for --single-prompt (e.g., chapter instructions)")
     parser.add_argument("--checklist", help="Path to todo-checklist.md for richer descriptions")
 
     args = parser.parse_args()
@@ -1154,6 +1265,30 @@ def main() -> int:
             research_topic=topic,
             research_type=research_type,
             checklist_path=args.checklist,
+        )
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print(result["prompt"])
+        return 0
+
+    if args.single_prompt:
+        if args.step is None:
+            parser.error("--single-prompt requires --step")
+            return 1
+        info = query_step(args.step, research_type)
+        cw = info.get("consolidate_with", [args.step])
+        if len(cw) > 1:
+            print(f"ERROR: Step {args.step} is part of a consolidated group "
+                  f"({min(cw)}-{max(cw)}). Use --consolidated-prompt instead.",
+                  file=sys.stderr)
+            return 1
+        topic = args.topic or "(research topic not provided)"
+        result = generate_single_step_prompt(
+            step=args.step,
+            research_topic=topic,
+            research_type=research_type,
+            context=args.context or "",
         )
         if args.json:
             print(json.dumps(result, indent=2))

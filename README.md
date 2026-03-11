@@ -63,9 +63,9 @@ Phase 6: 한국어 번역 + 내보내기      (Step 181-211)
 | **Step Execution Registry** | `query_step.py` — 211-step 결정론적 agent/tier/critic/pCCS 매핑. Orchestrator 할루시네이션 원천봉쇄 |
 | **Step Consolidation** | 동일 에이전트의 연속 step을 하나의 호출로 통합. 211 step → 17 Orchestrator invocations. P1 결정론적 프롬프트 생성 + 원자적 SOT 전진 |
 | **Adversarial Dialogue** | @fact-checker + @reviewer 병렬 적대적 리뷰. Generator-Critic 반복 루프 |
-| **Hallucination Containment** | V-1~V-4 취약점 + GAP-1~GAP-6 커버리지 갭 봉쇄. `verify_step_output.py`(VO-1~VO-5), `determine_dialogue_outcome.py`, `split_consolidated_group()` — 모두 P1 결정론적 |
+| **Hallucination Containment** | V-1~V-4 취약점 + GAP-1~GAP-6+GAP-DW 커버리지 갭 봉쇄 + QO H-1~H-3 컨텍스트 메모리 할루시네이션 원천봉쇄. `verify_step_output.py`(VO-1~VO-7), `determine_dialogue_outcome.py`, `split_consolidated_group()` — 모두 P1 결정론적 |
 | **3-tier Fallback** | Team → Sub-agent → Direct 실행으로 복원력 보장 |
-| **Context Reset Model** | 4개 HITL 지점에서 안전한 컨텍스트 리셋 + 3-File Memory + IMMORTAL 섹션으로 복원 |
+| **Context Reset Model** | 4개 HITL 지점에서 안전한 컨텍스트 리셋 + 3-File Memory + IMMORTAL 섹션으로 복원. QO-1~5 품질 최적화: Gate 피드백·이전 섹션 요약·11개 scoring signal ACTIVE RETRIEVAL |
 | **31개 Slash Commands** | `/thesis-init`, `/thesis-start`, `/self-improve`, `/predict-failures` 등 전체 워크플로우 제어 |
 | **3-Layer 번역 품질** | Layer 0 (자기 검토) → Layer 1a/1b (Python T1-T12) → Layer 2 (@translation-verifier 의미론적 검증) |
 | **KBSI 자기 개선** | 에러 분석 → 개선안 추출 → AGENTS.md 영구 반영. 시스템이 스스로 학습 |
@@ -132,7 +132,7 @@ Dissertation-Simulator-AgenticWorkflow/
 
 ```
 L0: Anti-Skip Guard + Step Output Verification (verify_step_output.py)
-  └── VO-1~VO-5: 파일 존재/크기, UTF-8, placeholder 미검출, GroundedClaim 존재, prefix 일치
+  └── VO-1~VO-7: 파일 존재/크기, UTF-8, placeholder 미검출, GroundedClaim 존재, prefix 일치, 금지표현(VO-6), 제목구조(VO-7)
 
 L1: Verification Gate (Python P1 — 결정론적)
   └── GroundedClaim 스키마 검증 (id, text, sources[], confidence, uncertainty)

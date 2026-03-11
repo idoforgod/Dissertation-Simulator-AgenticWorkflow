@@ -371,14 +371,14 @@ Layer 2: Semantic Verification (선택적)
 |---------|------|
 | `checklist_manager.py` | SOT CRUD, 체크리스트, Gate/HITL, Checkpoint, advance guards (H-5/H-6) |
 | `query_workflow.py` | 관측성 — dashboard, weakest-step, blocked, retry, error-trends, pccs |
-| `query_step.py` | **Step Execution Registry** — 211-step 결정론적 agent/tier/critic/pCCS 매핑 + Step Consolidation P1 함수 3개 (`generate_consolidated_prompt`, `get_next_execution_step`, `get_invocation_plan`) |
+| `query_step.py` | **Step Execution Registry** — 211-step 결정론적 agent/tier/critic/pCCS 매핑 + Step Consolidation/Execution P1 함수 4개 (`generate_consolidated_prompt`, `generate_single_step_prompt`, `get_next_execution_step`, `get_invocation_plan`) |
 | `fallback_controller.py` | 3-tier Fallback 제어 (Team→Sub-agent→Direct) + `split_consolidated_group()` P1 결정론적 그룹 분할 |
 
 **Hallucination Containment** (2):
 
 | 스크립트 | 역할 |
 |---------|------|
-| `verify_step_output.py` | **Step Output Verification** — VO-1~VO-5 결정론적 산출물 검증. V-1(파일 경로), GAP-3(prefix 불일치), GAP-4(placeholder) 제거 |
+| `verify_step_output.py` | **Step Output Verification** — VO-1~VO-7 결정론적 산출물 검증. V-1(파일 경로), GAP-3(prefix 불일치), GAP-4(placeholder), GAP-DW(비박사급 글쓰기) 제거. VO-6(금지 표현 WARNING), VO-7(제목 구조 FAIL) |
 | `determine_dialogue_outcome.py` | **Dialogue Outcome Decision** — All PASS→consensus, Any FAIL→continue/escalate. V-2(대화 루프 종료) 제거 |
 
 **pCCS System** (7):
@@ -456,12 +456,16 @@ Layer 2: Semantic Verification (선택적)
 | **pCCS Trend Detection** | pCCS 이력에서 mean_pccs 방향 (↑/↓/→) 탐지, 연속 rewrite 경고 → Orchestrator 조기 개입 | `restore_context.py` |
 | **Active Team Surfacing** | `_surface_active_team()`으로 Agent Team 상태를 IMMORTAL 섹션에 표면화 → 컨텍스트 리셋 후 팀 재개 보장 | `restore_context.py` |
 | **Active Dialogue Detection** | `_detect_active_dialogue()`로 dialogue-logs/에서 미완 적대적 대화를 탐지 → Round 1부터 재시작 방지 | `restore_context.py` |
-| **IMMORTAL Sections** | Gate/HITL 상태, 실행 컨텍스트, pCCS 상태, 활성 팀, 실패 예측이 컨텍스트 압축에서도 생존 | `restore_context.py` |
+| **IMMORTAL Sections** | Gate/HITL 상태, 실행 컨텍스트, pCCS 상태, 활성 팀, 실패 예측, Gate 피드백, 이전 섹션 요약이 컨텍스트 압축에서도 생존 | `restore_context.py` |
 | **Failure Predictions** | Predictive Debugging 결과를 IMMORTAL 섹션으로 표면화, 결과 없으면 UNAVAILABLE 경고 (unknown ≠ safe) | `restore_context.py` |
 | **Invocation Plan Progress** | `get_invocation_plan()`으로 17개 invocation 중 완료/진행/대기 상태를 IMMORTAL 섹션에 표면화 | `restore_context.py` |
-| **Consolidated Group State** | `get_next_execution_step()`으로 mid-consolidation restart 상태를 IMMORTAL 섹션에 표면화 | `restore_context.py` |
+| **Consolidated Group State** | `get_next_execution_step()`으로 mid-consolidation restart 상태를 IMMORTAL 섹션에 표면화. QO-4: `query_step()`으로 output_path, min_bytes, tier, claims, pCCS 모드 메타데이터 표면화 | `restore_context.py` |
+| **Gate Feedback (QO-1)** | `_surface_recent_gate_feedback()`로 최근 Gate의 FAIL/WARN 사유를 IMMORTAL 섹션에 표면화. JSON 파싱 우선 + MD state machine fallback으로 오탐 원천봉쇄 (ADR-074 H-1) | `restore_context.py` |
+| **Previous Sections (QO-2)** | `_surface_previous_sections_summary()`로 지난 5개 step 산출물의 제목·정확한 워드카운트·섹션 구조를 IMMORTAL 섹션에 표면화 → 서사적 일관성 유지 | `restore_context.py` |
+| **Enhanced Session Scoring (QO-3)** | ACTIVE RETRIEVAL에 4개 scoring signal 추가 (7→11): 설계 결정 매칭(3.5), 도구 시퀀스 패턴(2.5), 단계 정렬(2.0), 성공 패턴(3.0). 일반 동사/전치사 stopword 필터로 오탐 방지 (ADR-074 A-1/A-2) | `restore_context.py` |
+| **KI Quality Fields (QO-5)** | knowledge-index에 3개 필드 추가: previous_section_outputs(제목+워드카운트), review_feedback_summary(`parse_review_verdict()` 기반 정확한 추출), word_count_trend(단계별 분량 추세) | `_context_lib.py` |
 
-모든 기능은 P1 compliant (결정론적 Python 추출, LLM 추론 0%), read-only (SOT 수정 없음), additive-only (기존 동작 변경 없음).
+모든 기능은 P1 compliant (결정론적 Python 추출, LLM 추론 0%), read-only (SOT 수정 없음), additive-only (기존 동작 변경 없음). ADR-074에 의해 모든 추출 로직의 할루시네이션이 원천봉쇄됨.
 
 ### 4.4 E2E 테스트 (108 tests, 5 Track)
 
@@ -521,7 +525,7 @@ Dissertation Simulator가 AgenticWorkflow로부터 상속한 게놈 구성요소
 | **Invocation Plan** | `get_invocation_plan()` — 17개 Orchestrator 호출의 P1 결정론적 매핑. 각 호출의 step 범위·라벨·완료 상태 포함 |
 | **Consolidation Fallback** | 통합 그룹 3회 실패 시 개별 step으로 분할 → 각 step 독립 재시도. 교착 방지 |
 | **advance_group()** | 통합 그룹의 SOT 원자적 전진. 모든 step에 동일 output_path 기록 + guard 1회 실행 + current_step 갱신 |
-| **Hallucination Containment** | V-1~V-4 취약점과 GAP-1~GAP-6 커버리지 갭을 P1 결정론적 스크립트로 봉쇄하는 체계. verify_step_output.py(VO-1~VO-5) + determine_dialogue_outcome.py + split_consolidated_group() |
-| **verify_step_output.py** | P1 결정론적 Step 산출물 검증. VO-1(파일 존재/크기) → VO-2(UTF-8) → VO-3(placeholder 미검출) → VO-4(GroundedClaim 존재) → VO-5(prefix 일치). V-1, GAP-3, GAP-4 제거 |
+| **Hallucination Containment** | V-1~V-4 취약점과 GAP-1~GAP-6+GAP-DW 커버리지 갭을 P1 결정론적 스크립트로 봉쇄하는 체계. verify_step_output.py(VO-1~VO-7) + determine_dialogue_outcome.py + split_consolidated_group() + H-8 단일 Step 프롬프트 P1 생성 |
+| **verify_step_output.py** | P1 결정론적 Step 산출물 검증. VO-1(파일 존재/크기) → VO-2(UTF-8) → VO-3(placeholder 미검출) → VO-4(GroundedClaim 존재) → VO-5(prefix 일치) → VO-6(금지 학술 표현 WARNING) → VO-7(제목 구조 FAIL). V-1, GAP-3, GAP-4, GAP-DW 제거 |
 | **determine_dialogue_outcome.py** | P1 결정론적 Dialogue Loop 종료 판단. All PASS→consensus, Any FAIL+round<max→continue, Any FAIL+round≥max→escalate. V-2 제거 |
 | **split_consolidated_group()** | P1 결정론적 통합 그룹 분할. Binary split 알고리즘 (>4→절반, 3-4→이진, 2→개별, 1→그대로). V-4 제거 |

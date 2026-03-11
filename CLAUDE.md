@@ -106,7 +106,7 @@ AgenticWorkflow/
 │   │   ├── _context_lib.py          (공유 라이브러리 — 파싱·생성·검증·압축)
 │   │   ├── _claim_patterns.py       (Claim ID 정규식 SOT — 모든 스크립트 공유 모듈)
 │   │   ├── save_context.py          (SessionEnd/PreCompact 저장)
-│   │   ├── restore_context.py       (SessionStart 복원 + RLM)
+│   │   ├── restore_context.py       (SessionStart 복원 + RLM + QO-1~4 품질 최적화)
 │   │   ├── update_work_log.py       (PostToolUse 9개 도구 추적)
 │   │   ├── generate_context_summary.py (Stop 증분 스냅샷 + 안전망)
 │   │   ├── diagnose_context.py      (Abductive Diagnosis 사전 분석)
@@ -163,11 +163,11 @@ AgenticWorkflow/
 │   │   ├── validate_pccs_output.py  (pCCS PC1-PC7 구조 검증, P1 결정론적)
 │   │   ├── pccs_calibration.py      (pCCS 교정 delta 계산 — fact-checker/L1 기반, P1 결정론적)
 │   │   ├── run_pccs_pipeline.py     (pCCS P1 Pipeline Runner — DEGRADED/FULL 모드 단일 진입점, 할루시네이션 방지)
-│   │   ├── query_step.py           (Step Execution Registry — H-1~H-7 결정론적 step→agent/tier/critic/pCCS/consolidation/invocation 매핑, P1)
+│   │   ├── query_step.py           (Step Execution Registry — H-1~H-8 결정론적 step→agent/tier/critic/pCCS/consolidation/invocation/writing-standard 매핑, P1)
 │   │   ├── self_improve_manager.py  (KBSI SOT 관리 — register/apply/reject/status/apply-to-agents-md/sync-claude-md/queue-change)
 │   │   ├── validate_self_improvement.py (SI-1~SI-6 insight 검증 — P1 결정론적)
 │   │   ├── validate_skill_output.py (SK-1~SK-5 스킬 산출물 구조 검증 — P1 결정론적, CLI 도구)
-│   │   ├── verify_step_output.py   (VO-1~VO-5 Step 산출물 검증 — P1 결정론적, 할루시네이션 방지)
+│   │   ├── verify_step_output.py   (VO-1~VO-7 Step 산출물 검증 — P1 결정론적, 할루시네이션 방지 + DW 품질)
 │   │   ├── determine_dialogue_outcome.py (대화 루프 탈출 결정 — P1 결정론적, 할루시네이션 방지)
 │   │   └── _test_*.py (45개)        (유닛 테스트 — 각 프로덕션 스크립트 대응)
 │   ├── context-snapshots/           ← 런타임 (gitignored)
@@ -201,7 +201,7 @@ AgenticWorkflow/
 | PreToolUse (Edit\|Write) | `predictive_debug_guard.py` | 에러 이력 기반 위험 파일 경고 |
 | PreToolUse (Edit\|Write) | `guard_sot_write.py` | SOT 쓰기 보호 — Orchestrator/Team Lead만 허용 (exit 2) |
 | PreToolUse (Edit\|Write) | `ccp_ripple_scanner.py` | CCP-2 P1 의존성 자동 발견 (Hub-Spoke, 참조, 테스트, Hook) |
-| SessionStart | `restore_context.py` | RLM 포인터 + 과거 세션 인덱스 + Predictive Debugging 캐시 |
+| SessionStart | `restore_context.py` | RLM 포인터 + 과거 세션 인덱스 + Predictive Debugging 캐시 + QO-1~4 품질 최적화 (Gate 피드백·이전 섹션 요약·11개 scoring signal·step 메타데이터) |
 | PostToolUse (9개 도구) | `update_work_log.py` | 작업 로그 누적 |
 | PostToolUse (Bash\|Read) | `output_secret_filter.py` | 시크릿 탐지 (3-tier 추출, 25+ 패턴, 2-패스 스캔) |
 | PostToolUse (Edit\|Write) | `security_sensitive_file_guard.py` | 보안 민감 파일 수정 경고 |

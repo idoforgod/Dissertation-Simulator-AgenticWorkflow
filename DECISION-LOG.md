@@ -1126,6 +1126,71 @@
 
 ---
 
+### ADR-072: Doctoral Writing Skill Universal Integration — Defense-in-Depth
+
+- **날짜**: 2026-03-11
+- **상태**: `Accepted`
+- **맥락**: doctoral-writing 스킬이 thesis-writer 에이전트(1/47)에만 연결되어 97% 통합 갭 존재. 211-step 워크플로우 전체 산출물의 박사급 글쓰기 품질 미보장.
+- **결정**: 4-layer defense-in-depth 아키텍처로 통합:
+  - **Layer 1** (P1 Prompt Injection): `query_step.py`에 `_WRITING_STANDARD_SUFFIX` 상수 추가. `generate_consolidated_prompt()`와 신규 `generate_single_step_prompt()` 모두에 자동 삽입. **H-8 결정점** — single-step prompt도 P1 결정론적으로 생성 (기존 LLM prose template 대체).
+  - **Layer 2** (Agent Definition): 47개 text-producing agent .md 파일에 `## Writing Standard` 2-line 참조 추가. translator.md는 Korean-specific 변형.
+  - **Layer 3** (Reviewer Enhancement): `thesis-reviewer.md` Writing Quality 섹션을 DW 4 principles 기반 체계적 프레임워크로 교체.
+  - **Layer 4** (P1 Detection): `verify_step_output.py`에 VO-6 (banned expressions, WARNING) + VO-7 (heading structure, FAIL for >2KB files) 추가.
+- **변경 파일**:
+  - `query_step.py`: `_WRITING_STANDARD_SUFFIX`, `generate_single_step_prompt()`, `--single-prompt`/`--context` CLI
+  - `thesis-orchestrator.md`: E3 single-step 경로를 `--single-prompt` P1 호출로 통합
+  - `thesis-reviewer.md`: DW framework 기반 Writing Quality section
+  - 47 agent .md files: `## Writing Standard` 2-line 참조
+  - `verify_step_output.py`: VO-6, VO-7 추가
+  - `_test_query_step.py`: 16 new tests (H-8, generate_single_step_prompt)
+  - `_test_verify_step_output.py`: 14 new tests (VO-6, VO-7)
+- **근거**: 절대 기준 1(품질). 각 layer가 독립적으로 작동하여 어느 하나가 실패해도 나머지가 보장. DW instruction SOT는 `_WRITING_STANDARD_SUFFIX` (prompt text) + `SKILL.md` (full framework).
+- **대안 기각**: (1) 모든 agent에 다른 내용 삽입(Tier A/B/C) → Shotgun Surgery 위험 기각. (2) Orchestrator에서 DW 추가("do NOT modify" 충돌) → 기각. (3) LLM 프롬프트만 강화(P1 미보장) → 기각.
+- **파급 효과**: 51 files 수정. 기존 테스트 전체 pass (1317 tests). D-7 sync pairs intact.
+- **관련 ADR**: ADR-064 (query_step.py), ADR-071 (Hallucination Containment)
+
+### ADR-073: Context Memory Quality Optimization (QO-1~QO-5)
+
+- **날짜**: 2026-03-11
+- **상태**: `Accepted`
+- **맥락**: 종합 감사에서 IMMORTAL section이 높은 영향의 5개 필드를 누락하여 에이전트가 필요 컨텍스트의 50-60%만 수신 중임을 발견. ACTIVE RETRIEVAL도 이미 추출되었으나 사용되지 않는 5개 scoring signal 미활용. 목표: 에이전트가 SessionStart에서 받는 컨텍스트 품질을 85%+로 향상 (토큰 절감이 아닌 품질 최적화).
+- **결정**: 5개 Quality Optimization (QO) 변경:
+  - **QO-1** (`_surface_recent_gate_feedback`): IMMORTAL section에 최근 Gate FAIL/WARN 사유 표면화. 에이전트가 "왜" 실패했는지 확인 가능 → 가이드된 수정.
+  - **QO-2** (`_surface_previous_sections_summary`): 지난 5개 step 산출물의 제목·워드카운트·섹션 구조 표면화 → 서사적 일관성 유지.
+  - **QO-3** (`_retrieve_relevant_sessions` 4개 신호 추가): QO-3a 설계 결정 매칭(3.5/hit), QO-3b 도구 시퀀스 패턴(2.5), QO-3c 단계 정렬(2.0), QO-3d 성공 패턴(3.0). 기존 7개 signal에 4개 추가 → 관련 세션 검색 정밀도 향상.
+  - **QO-4** (`_build_active_thesis_step_block` 강화): `query_step.py` 호출로 다음 step의 output_path, min_bytes, tier, claims, pCCS 모드 표면화 → 에이전트가 실행 전 제약 확인.
+  - **QO-5** (`_KI_REQUIRED_DEFAULTS` 스키마 + `extract_session_facts` 확장): 3개 KI 필드 추가 — previous_section_outputs, review_feedback_summary, word_count_trend → 크로스세션 품질 컨텍스트.
+- **변경 파일**:
+  - `restore_context.py`: QO-1~QO-4 (2개 신규 함수, 4개 scoring signals, step metadata, compression_note 파라미터 수정)
+  - `_context_lib.py`: QO-5 (3개 KI 스키마 필드 + extraction logic)
+  - `_test_restore_context.py`: 18개 신규 테스트 (34→52)
+- **근거**: 절대 기준 1(품질). 토큰 비용은 무시 — 에이전트에게 더 풍부한 컨텍스트를 제공하면 산출물 품질이 향상.
+- **대안 기각**: (1) 전체 파일 로드(토큰 폭증, 관련성 없는 정보 포함) → 기각. (2) 토큰 절감 위주(품질 저하 위험) → 기각.
+- **파급 효과**: 기존 테스트 전체 유지 (1,422+ tests). SOT read-only. P1 deterministic. 비파괴적.
+- **관련 ADR**: ADR-071 (Hallucination Containment), ADR-064 (query_step.py)
+
+### ADR-074: QO Hallucination Containment — H-1~H-3 취약점 + A-1~A-2 정확도 결함 수정
+
+- **날짜**: 2026-03-11
+- **상태**: `Accepted`
+- **맥락**: ADR-073 (QO-1~5) 성찰에서 3개 할루시네이션 취약점 + 2개 정확도 결함 발견. P1 코드가 부정확한 정보를 생성하면 에이전트에게 "시스템 보증 거짓말"로 주입되어 할루시네이션 캐스케이드를 유발하는 최악의 패턴.
+- **결정**: 5개 수정:
+  - **H-1** (QO-1 Gate Feedback): `"FAIL" in line.upper()` 광범위 regex → JSON-first 파싱 (`validate_wave_gate.py` 구조화 필드) + MD state machine (Errors:/Warnings: 섹션 내 `- ` 항목만 추출). 서술적 텍스트 ("No FAILURES detected") 오탐 원천 봉쇄.
+  - **H-2** (QO-2/QO-5a Word Count): `f.read(5_000)` → `f.read()` 전체 파일. 5KB 캡이 10K단어 파일을 "800 words"로 표시 → 에이전트 분량 일관성 붕괴. 제목 추출만 5KB 제한 유지.
+  - **H-3** (QO-5b Review Feedback): `"VERDICT" in line.upper()` 광범위 regex → `parse_review_verdict()` P1 함수 직접 호출. 이미 존재하는 정확한 파서를 재사용하여 verdict/critical/warning/suggestion 구조적 추출.
+  - **A-1** (QO-3b Tool Sequence): `split("→")` 후 `split()[0]` → `re.findall(r"([A-Z][a-zA-Z]+)", seq)` 정규식. RLE 형식 변형에 대한 견고성 향상.
+  - **A-2** (QO-3a Decision Token): `_tokenize()` 직접 사용 → `_DECISION_EXTRA_STOP_WORDS` (30+ 일반 동사/전치사) 필터 추가. "switched", "added", "used" 등이 무관 세션에 점수 부여하는 문제 제거.
+- **변경 파일**:
+  - `restore_context.py`: H-1, H-2, A-1, A-2 (4개 코드 블록 + 1개 상수 추가)
+  - `_context_lib.py`: H-2 (QO-5a), H-3 (QO-5b)
+  - `_test_restore_context.py`: 3개 신규 테스트 (52→55) — JSON gate, false positive 방지, 대용량 word count
+- **근거**: 절대 기준 1(품질). "P1인데 부정확"은 "LLM 할루시네이션"보다 위험 — 시스템이 보증하는 거짓말이기 때문. 속도/토큰 비용 무시, 정확성만 추구.
+- **대안 기각**: (1) Gate report 전용 포맷 강제(기존 MD 호환성 파괴) → state machine fallback으로 양립. (2) word count 추정(파일 크기 기반) → 실제 split이 가장 정확.
+- **파급 효과**: 기존 테스트 전체 유지. 함수 시그니처 변경 없음. SOT read-only. 비파괴적.
+- **관련 ADR**: ADR-073 (QO-1~5), ADR-071 (Hallucination Containment)
+
+---
+
 ## 문서 관리
 
 - **갱신 규칙**: 새로운 `feat:` 커밋이 설계 결정을 포함하면, 해당 ADR을 이 문서에 추가한다.
