@@ -27,6 +27,9 @@ self-improvement-logs/
 # TDD Guard toggle — personal workflow setting (not shared)
 .tdd-guard
 
+# Agent runtime memory — developer-specific, not shared
+.claude/agent-memory/
+
 # Setup Hook logs — runtime diagnostics (regenerated on each run)
 .claude/hooks/*.log
 
